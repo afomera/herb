@@ -39,6 +39,85 @@ static herb_diff_result_T* diff_sources_tracking_whitespace(
   return herb_diff(old_document, new_document, &diff_options, allocator);
 }
 
+static herb_diff_result_T* diff_slim_sources(const char* old_source, const char* new_source, hb_allocator_T* allocator) {
+  parser_options_T options = HERB_DEFAULT_PARSER_OPTIONS;
+  options.language = HERB_LANGUAGE_SLIM;
+  options.exact_semantics = true;
+
+  hb_allocator_T old_allocator;
+  hb_allocator_T new_allocator;
+  hb_allocator_init(&old_allocator, HB_ALLOCATOR_ARENA);
+  hb_allocator_init(&new_allocator, HB_ALLOCATOR_ARENA);
+
+  AST_DOCUMENT_NODE_T* old_document = herb_parse(old_source, &options, &old_allocator);
+  AST_DOCUMENT_NODE_T* new_document = herb_parse(new_source, &options, &new_allocator);
+
+  herb_diff_options_T diff_options = HERB_DEFAULT_DIFF_OPTIONS;
+  diff_options.track_whitespace_changes = true;
+
+  return herb_diff(old_document, new_document, &diff_options, allocator);
+}
+
+TEST(test_diff_slim_identical_documents)
+  hb_allocator_T allocator;
+  hb_allocator_init(&allocator, HB_ALLOCATOR_ARENA);
+
+  herb_diff_result_T* result = diff_slim_sources("div.card\n  h1 Hello\n", "div.card\n    h1 Hello\n\n", &allocator);
+
+  ck_assert(herb_diff_trees_identical(result));
+  ck_assert_uint_eq(herb_diff_operation_count(result), 0);
+
+  hb_allocator_destroy(&allocator);
+END
+
+TEST(test_diff_slim_text_changed)
+  hb_allocator_T allocator;
+  hb_allocator_init(&allocator, HB_ALLOCATOR_ARENA);
+
+  herb_diff_result_T* result = diff_slim_sources("div\n  h1 Hello\n", "div\n  h1 World\n", &allocator);
+
+  ck_assert_uint_eq(herb_diff_operation_count(result), 1);
+
+  const herb_diff_operation_T* operation = herb_diff_operation_at(result, 0);
+
+  ck_assert_uint_eq(operation->type, HERB_DIFF_TEXT_CHANGED);
+  ck_assert_uint_eq(operation->path.depth, 3);
+  ck_assert_uint_eq(operation->path.indices[0], 0);
+  ck_assert_uint_eq(operation->path.indices[1], 0);
+  ck_assert_uint_eq(operation->path.indices[2], 0);
+
+  hb_allocator_destroy(&allocator);
+END
+
+TEST(test_diff_slim_attribute_value_changed)
+  hb_allocator_T allocator;
+  hb_allocator_init(&allocator, HB_ALLOCATOR_ARENA);
+
+  herb_diff_result_T* result = diff_slim_sources("p.old title=\"x\" Hi\n", "p.new title=\"x\" Hi\n", &allocator);
+
+  ck_assert_uint_eq(herb_diff_operation_count(result), 1);
+  ck_assert_uint_eq(herb_diff_operation_at(result, 0)->type, HERB_DIFF_ATTRIBUTE_VALUE_CHANGED);
+
+  hb_allocator_destroy(&allocator);
+END
+
+TEST(test_diff_slim_node_inserted)
+  hb_allocator_T allocator;
+  hb_allocator_init(&allocator, HB_ALLOCATOR_ARENA);
+
+  herb_diff_result_T* result = diff_slim_sources("div\n  h1 Hi\n  p Body\n", "div\n  h1 Hi\n  h2 Sub\n  p Body\n", &allocator);
+
+  ck_assert_uint_eq(herb_diff_operation_count(result), 1);
+
+  const herb_diff_operation_T* operation = herb_diff_operation_at(result, 0);
+
+  ck_assert_uint_eq(operation->type, HERB_DIFF_NODE_INSERTED);
+  ck_assert_uint_eq(operation->path.depth, 2);
+  ck_assert_uint_eq(operation->path.indices[1], 1);
+
+  hb_allocator_destroy(&allocator);
+END
+
 TEST(test_diff_identical_documents)
   hb_allocator_T allocator;
   hb_allocator_init(&allocator, HB_ALLOCATOR_ARENA);
@@ -564,6 +643,10 @@ TCase *diff_tests(void) {
   tcase_add_test(diff, test_diff_significant_change_stays_text_changed_when_opted_in);
   tcase_add_test(diff, test_diff_preserving_element_stays_text_changed_when_opted_in);
   tcase_add_test(diff, test_diff_operation_type_to_string);
+  tcase_add_test(diff, test_diff_slim_identical_documents);
+  tcase_add_test(diff, test_diff_slim_text_changed);
+  tcase_add_test(diff, test_diff_slim_attribute_value_changed);
+  tcase_add_test(diff, test_diff_slim_node_inserted);
 
   return diff;
 }
