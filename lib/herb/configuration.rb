@@ -3,6 +3,8 @@
 require "yaml"
 require "pathname"
 
+require_relative "template_language"
+
 module Herb
   class Configuration
     OPTIONS_PATH = File.expand_path("../../config/options.yml", __dir__ || __FILE__).freeze #: String
@@ -30,6 +32,11 @@ module Herb
     DEFAULTS = YAML.safe_load_file(DEFAULTS_PATH).freeze
 
     GLOB_CHARACTERS = /[*?\[\]{}]/ #: Regexp
+
+    # Slim's own defaults for `:shortcut` and `:merge_attrs`. A project's `slim:` settings replace
+    # them rather than merging into them, the way the Slim gem's options do.
+    DEFAULT_SLIM_SHORTCUTS = { "#" => { "attr" => "id" }, "." => { "attr" => "class" } }.freeze #: Hash[String, Hash[String, untyped]]
+    DEFAULT_SLIM_MERGE_ATTRS = { "class" => " " }.freeze #: Hash[String, String]
 
     attr_reader :config, :user_config, :config_path, :project_root, :misnamed_config_paths
 
@@ -105,6 +112,43 @@ module Herb
       openers = erb_openers
 
       openers.empty? ? {} : { erb_openers: openers }
+    end
+
+    #: () -> Hash[String, untyped]
+    def slim
+      @config["slim"] || {}
+    end
+
+    #: () -> Hash[String, Hash[String, untyped]]
+    def slim_shortcuts
+      slim["shortcuts"] || DEFAULT_SLIM_SHORTCUTS
+    end
+
+    #: () -> Hash[String, String]
+    def slim_merge_attrs
+      slim["merge_attrs"] || DEFAULT_SLIM_MERGE_ATTRS
+    end
+
+    # The parser options that carry the project's Slim settings to the Slim frontend: `slim_shortcuts`
+    # (shortcut => "attribute names and an optional tag:name") and `slim_merge_attrs` (attribute =>
+    # separator). This is the one place that turns `.herb.yml` settings into parser options, mirroring
+    # `slimParserOptions` in `@herb-tools/core`.
+    #: () -> Hash[Symbol, untyped]
+    def slim_parser_options
+      shortcuts = slim_shortcuts.transform_values { |shortcut| slim_shortcut_parser_value(shortcut) }
+
+      { slim_shortcuts: shortcuts, slim_merge_attrs: slim_merge_attrs.dup }
+    end
+
+    # The parser options to parse the file at `path` with: the project's parser options, the
+    # template language chosen from the extension, and for Slim files the project's Slim settings.
+    # Mirrors `parserOptionsForPath` in `@herb-tools/core`.
+    #: ((String | Pathname)?) -> Hash[Symbol, untyped]
+    def parser_options_for_path(path)
+      language = TemplateLanguage.for_path(path)
+      options = parser_options.merge(language: language)
+
+      language == "slim" ? options.merge(slim_parser_options) : options
     end
 
     def linter
@@ -250,6 +294,16 @@ module Herb
     end
 
     private
+
+    #: (Hash[String, untyped] | String) -> String
+    def slim_shortcut_parser_value(shortcut)
+      return shortcut.to_s unless shortcut.is_a?(Hash)
+
+      attributes = Array(shortcut["attr"] || shortcut[:attr]).map(&:to_s)
+      tag = shortcut["tag"] || shortcut[:tag]
+
+      (tag ? ["tag:#{tag}", *attributes] : attributes).join(" ")
+    end
 
     def find_config_file
       search_path = @start_path

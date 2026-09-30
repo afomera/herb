@@ -47,7 +47,7 @@ class ConfigurationTest < Minitest::Spec
     assert_equal File.join(@temp_dir, ".herb.yml"), config.config_path.to_s
     assert_equal "0.11.0", config.version
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], config.file_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], config.file_include_patterns
   end
 
   test "loads configuration using YAML anchors and aliases" do
@@ -62,7 +62,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb", "**/*.other.erb"], config.file_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb", "**/*.other.erb"], config.file_include_patterns
 
     assert_equal ["coverage/**/*", "log/**/*", "node_modules/**/*", "storage/**/*", "tmp/**/*", "vendor/**/*", "**/*.custom.erb", "**/*.other.erb"], config.file_exclude_patterns
   end
@@ -82,7 +82,7 @@ class ConfigurationTest < Minitest::Spec
 
     assert_equal File.join(@temp_dir, ".herb.yml"), config.config_path.to_s
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], config.file_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], config.file_include_patterns
   end
 
   test "include patterns are additive with defaults" do
@@ -94,7 +94,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], config.file_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], config.file_include_patterns
   end
 
   test "exclude patterns are additive with defaults" do
@@ -134,7 +134,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.xml.erb", "**/*.custom.erb"], config.linter_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.xml.erb", "**/*.custom.erb"], config.linter_include_patterns
   end
 
   test "linter_exclude_patterns combines files and linter patterns" do
@@ -164,7 +164,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.xml.erb", "**/*.custom.erb"], config.formatter_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.xml.erb", "**/*.custom.erb"], config.formatter_include_patterns
   end
 
   test "formatter_exclude_patterns combines files and formatter patterns" do
@@ -306,7 +306,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], config["files"]["include"]
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], config["files"]["include"]
     assert_equal({ "key" => "value" }, config["custom"])
   end
 
@@ -319,7 +319,7 @@ class ConfigurationTest < Minitest::Spec
 
     config = Herb::Configuration.load(@temp_dir)
 
-    assert_equal(["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], config.dig(:files, :include))
+    assert_equal(["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], config.dig(:files, :include))
   end
 
   test "module-level configuration accessor" do
@@ -331,7 +331,7 @@ class ConfigurationTest < Minitest::Spec
 
     Herb.configure(@temp_dir)
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.custom.erb"], Herb.configuration.file_include_patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim", "**/*.custom.erb"], Herb.configuration.file_include_patterns
   end
 
   test "reset_configuration clears cached config" do
@@ -355,7 +355,7 @@ class ConfigurationTest < Minitest::Spec
   test "default_file_patterns class method returns defaults" do
     patterns = Herb::Configuration.default_file_patterns
 
-    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb"], patterns
+    assert_equal ["**/*.herb", "**/*.html.erb", "**/*.html.herb", "**/*.html", "**/*.html+*.erb", "**/*.rhtml", "**/*.turbo_stream.erb", "**/*.slim"], patterns
   end
 
   test "default_exclude_patterns class method returns defaults" do
@@ -1077,5 +1077,79 @@ class ConfigurationTest < Minitest::Spec
     assert_silent do
       assert_empty Herb::Configuration.load(@temp_dir).misnamed_config_paths
     end
+  end
+
+  test "finds Slim templates by default" do
+    FileUtils.mkdir_p(File.join(@temp_dir, "app/views/users"))
+    File.write(File.join(@temp_dir, "app/views/users/show.html.slim"), "p Hello\n")
+    File.write(File.join(@temp_dir, "app/views/users/_card.slim"), "p Card\n")
+
+    config = Herb::Configuration.load(@temp_dir)
+    files = config.find_files(@temp_dir).map { |file| file.sub("#{@temp_dir}/", "") }
+
+    assert_equal ["app/views/users/_card.slim", "app/views/users/show.html.slim"], files
+  end
+
+  test "slim settings default to Slim's own shortcuts and merge_attrs" do
+    config = Herb::Configuration.load(@temp_dir)
+
+    assert_equal({ "#" => { "attr" => "id" }, "." => { "attr" => "class" } }, config.slim_shortcuts)
+    assert_equal({ "class" => " " }, config.slim_merge_attrs)
+  end
+
+  test "slim settings from .herb.yml replace the defaults" do
+    write_config(<<~YAML)
+      version: "0.11.0"
+      slim:
+        shortcuts:
+          "#": { attr: id }
+          "~": { attr: data-testid }
+        merge_attrs:
+          class: " "
+          data-controller: " "
+    YAML
+
+    config = Herb::Configuration.load(@temp_dir)
+
+    assert_equal({ "#" => { "attr" => "id" }, "~" => { "attr" => "data-testid" } }, config.slim_shortcuts)
+    assert_equal({ "class" => " ", "data-controller" => " " }, config.slim_merge_attrs)
+  end
+
+  test "slim_parser_options flattens shortcuts into the parser's string map" do
+    write_config(<<~YAML)
+      version: "0.11.0"
+      slim:
+        shortcuts:
+          "#": { attr: id }
+          "@": { tag: section, attr: [role, aria-label] }
+          "&": { tag: input }
+    YAML
+
+    config = Herb::Configuration.load(@temp_dir)
+
+    assert_equal({ "#" => "id", "@" => "tag:section role aria-label", "&" => "tag:input" }, config.slim_parser_options[:slim_shortcuts])
+    assert_equal({ "class" => " " }, config.slim_parser_options[:slim_merge_attrs])
+  end
+
+  test "parser_options_for_path chooses the language and passes Slim settings to Slim files" do
+    write_config(<<~YAML)
+      version: "0.11.0"
+      parser:
+        erb_openers: ["graphql"]
+      slim:
+        shortcuts:
+          "~": { attr: data-testid }
+    YAML
+
+    config = Herb::Configuration.load(@temp_dir)
+
+    assert_equal({ erb_openers: ["graphql"], language: "erb" }, config.parser_options_for_path("app/views/show.html.erb"))
+
+    slim_options = config.parser_options_for_path("app/views/show.html.slim")
+
+    assert_equal "slim", slim_options[:language]
+    assert_equal ["graphql"], slim_options[:erb_openers]
+    assert_equal({ "~" => "data-testid" }, slim_options[:slim_shortcuts])
+    assert_equal({ "class" => " " }, slim_options[:slim_merge_attrs])
   end
 end

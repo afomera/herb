@@ -10,6 +10,7 @@ require "stringio"
 
 require_relative "colors"
 require_relative "configuration"
+require_relative "template_language"
 
 module Herb
   class Project
@@ -362,7 +363,7 @@ module Herb
       end
 
       Timeout.timeout(file_timeout) do
-        parse_result = Herb.parse(file_content)
+        parse_result = Herb.parse(file_content, **configuration.parser_options_for_path(file_path))
 
         if parse_result.failed?
           result[:file_content] = file_content
@@ -401,7 +402,7 @@ module Herb
           $stderr.reopen(stderr_file.path, "w")
 
           begin
-            parse_result = Herb.parse(file_content)
+            parse_result = Herb.parse(file_content, **configuration.parser_options_for_path(file_path))
             exit!(parse_result.failed? ? 2 : 0)
           rescue StandardError => e
             warn "Ruby exception: #{e.class}: #{e.message}"
@@ -457,7 +458,8 @@ module Herb
     end
 
     def classify_parse_errors(file_path, file_content)
-      default_result = Herb.parse(file_content)
+      parser_options = configuration.parser_options_for_path(file_path)
+      default_result = Herb.parse(file_content, **parser_options)
 
       diagnostics = if default_result.respond_to?(:errors) && default_result.errors.any?
                       default_result.errors.map do |error|
@@ -470,8 +472,8 @@ module Herb
                       end
                     end
 
-      no_strict_result = Herb.parse(file_content, strict: false)
-      no_analyze_result = Herb.parse(file_content, analyze: false)
+      no_strict_result = Herb.parse(file_content, **parser_options, strict: false)
+      no_analyze_result = Herb.parse(file_content, **parser_options, analyze: false)
 
       if no_strict_result.success?
         { status: :strict_parse_error, diagnostics: diagnostics,
@@ -489,6 +491,12 @@ module Herb
     end
 
     def compile_file(file_path, file_content)
+      unless TemplateLanguage.erb?(file_path)
+        reason = "Herb::Engine only compiles ERB templates"
+
+        return { status: :skipped, skip_reason: reason, log: "⊘ Skipping #{file_path}: #{reason}" }
+      end
+
       require_relative "engine"
       require_relative "engine/validators"
 

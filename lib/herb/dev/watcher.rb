@@ -53,6 +53,9 @@ module Herb
       #: (?String) -> Integer
       def index(path = @root)
         @config.find_files(path).each do |file_path|
+          # The dev pipeline diffs and recompiles ERB, so templates in other languages (Slim) are not hot reloaded.
+          next unless Herb::TemplateLanguage.erb?(file_path)
+
           @file_states[file_path] = File.read(file_path)
         rescue StandardError
           nil
@@ -142,6 +145,7 @@ module Herb
         return handle_asset(path, relative_path) if @config.path_included?(relative_path, Assets::PATTERNS)
         return if @config.path_excluded?(relative_path, @exclude_patterns, @include_patterns)
         return unless @config.path_included?(relative_path, @include_patterns)
+        return unless Herb::TemplateLanguage.erb?(relative_path)
 
         event = normalize(raw.kind, path, relative_path)
 

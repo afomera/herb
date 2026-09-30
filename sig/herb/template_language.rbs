@@ -1,0 +1,23 @@
+# Generated from lib/herb/template_language.rb with RBS::Inline
+
+module Herb
+  # Chooses the template language a file is parsed with, going by its extension.
+  #
+  #     Herb::TemplateLanguage.for_path("app/views/users/show.html.slim") #=> "slim"
+  #     Herb::TemplateLanguage.for_path("app/views/users/show.html.erb")  #=> "erb"
+  #
+  # Mirrors `languageForPath` in `@herb-tools/core`.
+  module TemplateLanguage
+    SLIM_EXTENSIONS: Array[String]
+
+    # : ((String | Pathname)?) -> bool
+    def self.slim?: ((String | Pathname)?) -> bool
+
+    # : ((String | Pathname)?) -> String
+    def self.for_path: ((String | Pathname)?) -> String
+
+    # Whether a file is an ERB template, as opposed to another language Herb parses into the same tree.
+    # : ((String | Pathname)?) -> bool
+    def self.erb?: ((String | Pathname)?) -> bool
+  end
+end

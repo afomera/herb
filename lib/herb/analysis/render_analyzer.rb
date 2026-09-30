@@ -970,7 +970,7 @@ module Herb
 
       def process_file_for_render_calls(file)
         content = File.read(file, encoding: "UTF-8")
-        result = Herb.parse(content, render_nodes: true)
+        result = Herb.parse(content, **configuration.parser_options_for_path(file), render_nodes: true)
 
         visitor = RenderCallVisitor.new(file)
         visitor.visit(result.value)
