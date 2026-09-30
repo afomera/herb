@@ -3,7 +3,16 @@
 #include <stddef.h>
 #include <string.h>
 
-<%- entries = parser_options.all_c_fields.flat_map { |field| field.string_array? ? [[field.c_name, "NULL"], [field.count_name, "0"]] : [[field.c_name, field.pointer? ? "NULL" : field.c_default.to_s]] } -%>
+<%- parser_options.all_c_fields.select(&:string_map?).each do |field| -%>
+const hb_string_T <%= field.c_default_pairs_name %>[<%= field.default.size * 2 %>] = {
+<%- field.default.each do |key, value| -%>
+  { .data = (char*) <%= key.inspect %>, .length = <%= key.bytesize %> },
+  { .data = (char*) <%= value.inspect %>, .length = <%= value.bytesize %> },
+<%- end -%>
+};
+
+<%- end -%>
+<%- entries = parser_options.all_c_fields.flat_map { |field| field.string_array? ? [[field.c_name, "NULL"], [field.count_name, "0"]] : field.string_map? ? [[field.c_name, field.c_default_pairs_name], [field.count_name, "#{field.c_default_pairs_name}_COUNT"]] : [[field.c_name, field.pointer? ? "NULL" : field.c_default.to_s]] } -%>
 <%- prefix = "const parser_options_T HERB_DEFAULT_PARSER_OPTIONS = { " -%>
 <%- entries.each_with_index do |(name, value), index| -%>
 <%= index.zero? ? prefix : " " * prefix.length %>.<%= name %> = <%= value %><%= index < entries.length - 1 ? "," : " };" %>

@@ -28,6 +28,44 @@ void herb_extract_parser_options(VALUE options, parser_options_T* parser_options
       }
     }
   }
+<%- elsif field.string_map? -%>
+  {
+    VALUE value = rb_hash_lookup(options, rb_utf8_str_new_cstr("<%= field.snake_case %>"));
+    if (NIL_P(value)) { value = rb_hash_lookup(options, ID2SYM(rb_intern("<%= field.snake_case %>"))); }
+
+    if (!NIL_P(value)) {
+      // Points into the Hash's strings, which stay alive (and can't move: parsing doesn't allocate Ruby objects)
+      // until the parse returns.
+      static hb_string_T pairs[<%= field.c_name.upcase %>_MAX_ENTRIES * 2];
+
+      Check_Type(value, T_HASH);
+
+      if (RHASH_SIZE(value) > <%= field.c_name.upcase %>_MAX_ENTRIES) {
+        rb_raise(rb_eArgError, "<%= field.snake_case %> accepts at most %d entries", <%= field.c_name.upcase %>_MAX_ENTRIES);
+      }
+
+      VALUE keys = rb_funcall(value, rb_intern("keys"), 0);
+      long count = RARRAY_LEN(keys);
+
+      for (long index = 0; index < count; index++) {
+        VALUE key = rb_ary_entry(keys, index);
+        VALUE entry = rb_hash_aref(value, key);
+
+        if (SYMBOL_P(key)) { key = rb_sym2str(key); }
+        if (SYMBOL_P(entry)) { entry = rb_sym2str(entry); }
+
+        if (!RB_TYPE_P(key, T_STRING) || !RB_TYPE_P(entry, T_STRING)) {
+          rb_raise(rb_eTypeError, "<%= field.snake_case %> keys and values must be Strings or Symbols");
+        }
+
+        pairs[index * 2] = hb_string_from_data(RSTRING_PTR(key), (uint32_t) RSTRING_LEN(key));
+        pairs[index * 2 + 1] = hb_string_from_data(RSTRING_PTR(entry), (uint32_t) RSTRING_LEN(entry));
+      }
+
+      parser_options-><%= field.c_name %> = pairs;
+      parser_options-><%= field.count_name %> = (size_t) count;
+    }
+  }
 <%- elsif field.ruby_unit == "seconds" -%>
   {
     VALUE value = rb_hash_lookup(options, rb_utf8_str_new_cstr("<%= field.snake_case %>"));
@@ -66,6 +104,19 @@ VALUE herb_build_parser_options_hash(const parser_options_T* options) {
       hb_string_T item = options-><%= field.c_name %>[index];
 
       rb_ary_push(<%= field.snake_case %>, rb_utf8_str_new(item.data, (long) item.length));
+    }
+
+    rb_hash_aset(kwargs, ID2SYM(rb_intern("<%= field.snake_case %>")), <%= field.snake_case %>);
+  }
+<%- elsif field.string_map? -%>
+  {
+    VALUE <%= field.snake_case %> = rb_hash_new();
+
+    for (size_t index = 0; index < options-><%= field.count_name %>; index++) {
+      hb_string_T key = options-><%= field.c_name %>[index * 2];
+      hb_string_T value = options-><%= field.c_name %>[index * 2 + 1];
+
+      rb_hash_aset(<%= field.snake_case %>, rb_utf8_str_new(key.data, (long) key.length), rb_utf8_str_new(value.data, (long) value.length));
     }
 
     rb_hash_aset(kwargs, ID2SYM(rb_intern("<%= field.snake_case %>")), <%= field.snake_case %>);

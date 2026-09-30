@@ -1195,6 +1195,7 @@ module Herb
         @lex = config.fetch("lex", false)
         @c_enum = config["c_enum"]
         @values = config.fetch("values", [])
+        @max_entries = config["max_entries"]
       end
 
       attr_reader :values
@@ -1219,6 +1220,20 @@ module Herb
 
       def string_array?
         @type == "string_array"
+      end
+
+      # A map of strings to strings (a Ruby Hash, a JavaScript object). In C, a flat array of key/value
+      # `hb_string_T` pairs (`count_name` is the number of pairs), which defaults to the pairs in `default`.
+      def string_map?
+        @type == "string_map"
+      end
+
+      def max_entries
+        @max_entries || 32
+      end
+
+      def c_default_pairs_name
+        "HERB_DEFAULT_#{@c_name.upcase}"
       end
 
       def enum?
@@ -1291,8 +1306,13 @@ module Herb
         !string_array?
       end
 
+      def ruby_map_literal
+        "{ #{@default.map { |key, value| "#{key.inspect} => #{value.inspect}" }.join(", ")} }.freeze"
+      end
+
       def ruby_default
         return "[]" if string_array?
+        return ruby_map_literal if string_map?
         return @default.inspect if enum?
         return "nil" if nullable? && @default.nil?
 
@@ -1307,6 +1327,7 @@ module Herb
 
       def ruby_default_type
         return "String" if enum?
+        return ruby_type if string_map?
         return ruby_type unless nullable?
 
         ruby_type.delete_suffix("?")
@@ -1322,6 +1343,7 @@ module Herb
 
       def js_default
         return "[]" if string_array?
+        return "{ #{@default.map { |key, value| "#{key.inspect}: #{value.inspect}" }.join(", ")} }" if string_map?
         return @default.inspect if enum?
         return "null" if nullable? && @default.nil?
 
@@ -1336,7 +1358,7 @@ module Herb
       end
 
       def rust_default
-        return "None" if string_array?
+        return "None" if string_array? || string_map?
         return "String::from(#{@default.inspect})" if enum?
         return "None" if nullable? && @default.nil?
 
@@ -1349,7 +1371,7 @@ module Herb
         return "bool" if boolean?
         return "uint64_t" if uint64?
         return "uint32_t*" if pointer?
-        return "const hb_string_T*" if string_array?
+        return "const hb_string_T*" if string_array? || string_map?
         return c_enum_type if enum?
 
         "uint32_t"
@@ -1358,6 +1380,7 @@ module Herb
       def ruby_type
         return "bool" if boolean?
         return "Array[String]" if string_array?
+        return "Hash[String | Symbol, String]" if string_map?
         return "String | Symbol" if enum?
         return "Numeric" if @ruby_unit == "seconds"
 
@@ -1367,6 +1390,7 @@ module Herb
       def typescript_type
         return "boolean" if boolean?
         return "string[]" if string_array?
+        return "Record<string, string>" if string_map?
         return @values.map(&:inspect).join(" | ") if enum?
 
         nullable? ? "number | null" : "number"
@@ -1382,6 +1406,7 @@ module Herb
       def rust_type
         return "bool" if boolean?
         return "Option<Vec<String>>" if string_array?
+        return "Option<Vec<(String, String)>>" if string_map?
         return "String" if enum?
 
         nullable? ? "Option<u32>" : "u32"

@@ -21,12 +21,19 @@ const char* <%= field.c_enum_to_string %>(<%= field.c_enum_type %> value);
 typedef struct PARSER_OPTIONS_STRUCT {
 <%- parser_options.all_c_fields.each do |field| -%>
   <%= field.c_type %> <%= field.c_name %>;
-<%- if field.string_array? -%>
+<%- if field.string_array? || field.string_map? -%>
   size_t <%= field.count_name %>;
 <%- end -%>
 <%- end -%>
 } parser_options_T;
 
 extern const parser_options_T HERB_DEFAULT_PARSER_OPTIONS;
+<%- parser_options.all_c_fields.select(&:string_map?).each do |field| -%>
+
+// Default <%= field.snake_case %>: key/value pairs.
+extern const hb_string_T <%= field.c_default_pairs_name %>[<%= field.default.size * 2 %>];
+#define <%= field.c_default_pairs_name %>_COUNT <%= field.default.size %>
+#define <%= field.c_name.upcase %>_MAX_ENTRIES <%= field.max_entries %>
+<%- end -%>
 
 #endif

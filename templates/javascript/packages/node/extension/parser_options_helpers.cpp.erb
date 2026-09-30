@@ -1,5 +1,8 @@
 #include "parser_options_helpers.h"
 
+#include <string>
+#include <vector>
+
 void herb_extract_parser_options(napi_env env, napi_value options, parser_options_T* parser_options) {
   napi_valuetype valuetype;
   napi_typeof(env, options, &valuetype);
@@ -28,6 +31,48 @@ void herb_extract_parser_options(napi_env env, napi_value options, parser_option
         size_t length = 0;
         napi_get_value_string_utf8(env, property, buffer, sizeof(buffer), &length);
         <%= field.c_enum_from_string %>(buffer, length, &parser_options-><%= field.c_name %>);
+      }
+<%- elsif field.string_map? -%>
+      napi_valuetype property_type;
+      napi_typeof(env, property, &property_type);
+
+      if (property_type == napi_object) {
+        // Kept alive until the next extraction on this thread, i.e. for the duration of the parse.
+        static thread_local std::vector<std::string> storage;
+        static thread_local std::vector<hb_string_T> pairs;
+
+        napi_value keys;
+        uint32_t count = 0;
+        napi_get_property_names(env, property, &keys);
+        napi_get_array_length(env, keys, &count);
+
+        if (count > <%= field.c_name.upcase %>_MAX_ENTRIES) { count = <%= field.c_name.upcase %>_MAX_ENTRIES; }
+
+        storage.clear();
+        storage.reserve(count * 2);
+        pairs.clear();
+
+        for (uint32_t index = 0; index < count; index++) {
+          napi_value key;
+          napi_value entry;
+          napi_get_element(env, keys, index, &key);
+          napi_get_property(env, property, key, &entry);
+
+          for (napi_value item : { key, entry }) {
+            size_t length = 0;
+            napi_get_value_string_utf8(env, item, nullptr, 0, &length);
+            std::string value(length, '\0');
+            napi_get_value_string_utf8(env, item, value.data(), length + 1, &length);
+            storage.push_back(std::move(value));
+          }
+        }
+
+        for (const std::string& value : storage) {
+          pairs.push_back(hb_string_from_data(value.data(), (uint32_t) value.size()));
+        }
+
+        parser_options-><%= field.c_name %> = pairs.data();
+        parser_options-><%= field.count_name %> = count;
       }
 <%- elsif field.nullable? -%>
       napi_valuetype property_type;

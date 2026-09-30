@@ -1,5 +1,8 @@
 #include "parser_options_helpers.h"
 
+#include <string>
+#include <vector>
+
 void herb_extract_parser_options(emscripten::val options, parser_options_T* parser_options) {
   if (options.isUndefined() || options.isNull() || options.typeOf().as<std::string>() != "object") { return; }
 
@@ -13,6 +16,36 @@ void herb_extract_parser_options(emscripten::val options, parser_options_T* pars
   if (options.hasOwnProperty("<%= field.snake_case %>") && options["<%= field.snake_case %>"].isString()) {
     std::string value = options["<%= field.snake_case %>"].as<std::string>();
     <%= field.c_enum_from_string %>(value.c_str(), value.size(), &parser_options-><%= field.c_name %>);
+  }
+
+<%- elsif field.string_map? -%>
+  if (options.hasOwnProperty("<%= field.snake_case %>") && options["<%= field.snake_case %>"].typeOf().as<std::string>() == "object") {
+    // Kept alive until the next extraction, i.e. for the duration of the parse.
+    static std::vector<std::string> storage;
+    static std::vector<hb_string_T> pairs;
+
+    emscripten::val map = options["<%= field.snake_case %>"];
+    emscripten::val keys = emscripten::val::global("Object").call<emscripten::val>("keys", map);
+    size_t count = keys["length"].as<size_t>();
+
+    if (count > <%= field.c_name.upcase %>_MAX_ENTRIES) { count = <%= field.c_name.upcase %>_MAX_ENTRIES; }
+
+    storage.clear();
+    storage.reserve(count * 2);
+    pairs.clear();
+
+    for (size_t index = 0; index < count; index++) {
+      std::string key = keys[index].as<std::string>();
+      storage.push_back(key);
+      storage.push_back(map[key].as<std::string>());
+    }
+
+    for (const std::string& value : storage) {
+      pairs.push_back(hb_string_from_data(value.data(), (uint32_t) value.size()));
+    }
+
+    parser_options-><%= field.c_name %> = pairs.data();
+    parser_options-><%= field.count_name %> = count;
   }
 
 <%- elsif field.nullable? -%>
