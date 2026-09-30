@@ -7,6 +7,7 @@
 #include "include/lib/hb_allocator.h"
 #include "include/lib/hb_array.h"
 #include "include/parser/parser.h"
+#include "include/slim/slim_parser.h"
 #include "include/version.h"
 #include "include/visitor.h"
 
@@ -55,6 +56,12 @@ HERB_EXPORTED_FUNCTION AST_DOCUMENT_NODE_T* herb_parse(
   hb_allocator_T* allocator
 ) {
   if (!source) { source = ""; }
+
+  // The single dispatch hook for template languages other than HTML+ERB (the `language` parser option).
+  // Their frontends build the same HTML+ERB syntax tree and run the analysis themselves.
+  if (options != NULL && options->language == HERB_LANGUAGE_SLIM) {
+    return herb_slim_parse(source, options, allocator);
+  }
 
   lexer_T lexer = { 0 };
   lexer_init(&lexer, source, allocator);
