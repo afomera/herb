@@ -4,6 +4,7 @@
 require "pathname"
 
 require_relative "../analysis/partial_resolver"
+require_relative "../template_language"
 require_relative "context/origin"
 require_relative "context/replacements"
 
@@ -65,6 +66,13 @@ module Herb
       #: () -> String
       def relative_file_path
         @relative_file_path_cache[0] ||= self.class.derive_relative_file_path(file_path, project_path)
+      end
+
+      # The language the template is written in, `"erb"` or `"slim"`. The engine passes the one it
+      # compiles; a context built without one goes by the file extension.
+      #: () -> String
+      def language
+        (options[:language] || TemplateLanguage.for_path(file_path)).to_s
       end
 
       #: () -> untyped

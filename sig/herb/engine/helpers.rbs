@@ -21,6 +21,10 @@ module Herb
       # : (String) -> String
       def self.strip_trailing_comment: (String) -> String
 
+      # Whether `code` parses as Ruby. Without Prism nothing can be checked, so nothing is.
+      # : (String) -> bool
+      def self.valid_ruby?: (String) -> bool
+
       # : () -> bool
       def self.prism_available?: () -> bool
     end

@@ -66,6 +66,16 @@ module Herb
         code
       end
 
+      # Whether `code` parses as Ruby. Without Prism nothing can be checked, so nothing is.
+      #: (String) -> bool
+      def self.valid_ruby?(code)
+        return false unless prism_available?
+
+        Prism.parse(code).success?
+      rescue StandardError
+        false
+      end
+
       #: () -> bool
       def self.prism_available?
         return @prism_available unless @prism_available.nil?

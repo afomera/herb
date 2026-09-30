@@ -41,6 +41,11 @@ module Herb
       # : () -> String
       def relative_file_path: () -> String
 
+      # The language the template is written in, `"erb"` or `"slim"`. The engine passes the one it
+      # compiles; a context built without one goes by the file extension.
+      # : () -> String
+      def language: () -> String
+
       # : () -> untyped
       def resolver: () -> untyped
 

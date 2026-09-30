@@ -126,6 +126,18 @@ module Herb
 
       def process_erb_tag: (untyped node, ?skip_comment_check: untyped) -> untyped
 
+      # Records the template line the token about to be written at `index` came from, for a template
+      # whose compiled Ruby is aligned to its source by line (see `Engine#align_to_source_line`).
+      # Nodes a visitor built have no location (line 0) and are left where they fall.
+      # : (untyped, ?Integer) -> void
+      def mark_source_line: (untyped, ?Integer) -> void
+
+      # Code the parser generated rather than read from the template (a zero-width node, like the
+      # helpers a Slim document with splats starts with) has no template lines to keep, so in a
+      # template aligned by line it is folded onto one line when it still parses that way.
+      # : (untyped, String) -> String
+      def single_line_synthetic_code: (untyped, String) -> String
+
       # : (untyped, ?extra: Integer) -> void
       def keep_span_line_count: (untyped, ?extra: Integer) -> void
 

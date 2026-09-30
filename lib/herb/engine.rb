@@ -14,6 +14,7 @@ require_relative "engine/helpers"
 require_relative "engine/compiler"
 require_relative "engine/errors"
 require_relative "diagnostic/formatter"
+require_relative "template_language"
 
 module Herb
   class Engine
@@ -21,6 +22,9 @@ module Herb
     attr_reader :context #: Visitor::Context
     attr_reader :bufvar #: String
     attr_reader :visitors #: Visitor::Stack
+    attr_reader :language #: String
+
+    LANGUAGES = ["erb", "slim"].freeze #: Array[String]
 
     #: () -> Pathname?
     def filename
@@ -72,12 +76,15 @@ module Herb
     ).freeze
 
     def initialize(input, properties = {})
+      @language = resolve_language(properties)
+      properties = language_properties(properties)
+
       @context = Visitor::Context.new(
         file_path: properties[:filename],
         project_path: properties[:project_path],
-        options: context_options(properties),
+        options: context_options(properties).merge(language: @language),
         resolver: properties[:resolver],
-        **(properties[:context] || {})
+        **context_data(input, properties)
       )
 
       @bufvar = properties[:bufvar] || properties[:outvar] || "_buf"
@@ -89,7 +96,9 @@ module Herb
       @src = properties[:src] || +""
       @chain_appends = properties[:chain_appends]
       @buffer_on_stack = false
-      @parser_options = properties.fetch(:parser_options, default_parser_options).transform_keys(&:to_sym)
+      @parser_options = language_parser_options(properties.fetch(:parser_options, default_parser_options).transform_keys(&:to_sym))
+      @source_line = 1
+      @source_line_scanned = 0
 
       @visitors = Visitor::Stack.build(properties.fetch(:visitors, Visitor::Stack.new))
       @visitors.validate_order!
@@ -127,7 +136,7 @@ module Herb
         wrapped = !wrapping.equal?(postamble)
         postamble = wrapping
 
-        compiler = compiler_class.new(self, properties.merge(source: input))
+        compiler = compiler_class.new(self, properties.merge(source: input, language: @language))
 
         parse_result.value.accept(compiler)
 
@@ -336,6 +345,22 @@ module Herb
       @src << postamble
     end
 
+    # Pads the compiled Ruby with newlines until the code about to be written lands on `line`, the
+    # line of the template it came from. ERB templates keep their line numbers by carrying the
+    # template's own newlines into the compiled Ruby. A template in another language (Slim)
+    # compiles from a tree whose ERB has no newlines of its own, so the compiler asks for each
+    # piece of code to be moved down to its line instead. Code that already sits past its line
+    # stays where it is, so a Ruby error is reported on the template line or just before it.
+    #: (Integer) -> void
+    def align_to_source_line(line)
+      @source_line += @src[@source_line_scanned..].to_s.count("\n") if @src.length > @source_line_scanned
+      @source_line_scanned = @src.length
+
+      return unless line > @source_line
+
+      add_code("\n" * (line - @source_line))
+    end
+
     def with_buffer(&)
       if @chain_appends
         @src << "; " << @bufvar unless @buffer_on_stack
@@ -471,6 +496,51 @@ module Herb
 
     def context_options(properties)
       properties.except(:visitors, :src, :context, :resolver)
+    end
+
+    # What the engine passes its visitors besides the file: the template's source, and the caller's
+    # own `context` keys, which win.
+    #: (String, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def context_data(input, properties)
+      { source: input }.merge(properties[:context] || {})
+    end
+
+    # The template language, from the `language` option, a `language` parser option, or the
+    # extension of `filename`, in that order. Anything but a `.slim` file is ERB.
+    #: (Hash[Symbol, untyped]) -> String
+    def resolve_language(properties)
+      parser_options = properties[:parser_options] || {}
+      explicit = properties[:language] || parser_options[:language] || parser_options["language"]
+      language = explicit ? explicit.to_s : TemplateLanguage.for_path(properties[:filename])
+
+      return language if LANGUAGES.include?(language)
+
+      raise ArgumentError, "Herb::Engine compiles #{LANGUAGES.join(" and ")} templates, not #{language.inspect}"
+    end
+
+    # What compiling Slim changes about the engine's options. Slim's whitespace is already exact in
+    # the tree it parses to, so the ERB trim rules that fold the whitespace around a standalone
+    # `<% %>` tag must not apply to it. And Slim HTML-escapes `=` and leaves `==` alone wherever
+    # the output lands, in an attribute or a `<script>` too, so the context-aware escape functions
+    # are turned off and every escaped output goes through `escapefunc`.
+    #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def language_properties(properties)
+      return properties if @language == "erb"
+
+      properties.merge(trim: false, attrfunc: nil, jsfunc: nil, cssfunc: nil)
+    end
+
+    # A Slim template is parsed with the project's Slim settings (`slim:` in `.herb.yml`), which
+    # parser options passed to the engine override, and always with `exact_semantics`, which is
+    # what makes the tree render what the Slim gem renders. Locations are kept so the compiled
+    # Ruby can be aligned to the Slim source.
+    #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def language_parser_options(options)
+      return options if @language == "erb"
+
+      Herb.configuration.slim_parser_options
+          .merge(options)
+          .merge(language: @language, exact_semantics: true, track_locations: true)
     end
 
     #: () -> Hash[Symbol, untyped]

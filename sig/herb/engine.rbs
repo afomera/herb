@@ -10,6 +10,10 @@ module Herb
 
     attr_reader visitors: Visitor::Stack
 
+    attr_reader language: String
+
+    LANGUAGES: Array[String]
+
     # : () -> Pathname?
     def filename: () -> Pathname?
 
@@ -77,6 +81,15 @@ module Herb
 
     def add_postamble: (untyped postamble) -> untyped
 
+    # Pads the compiled Ruby with newlines until the code about to be written lands on `line`, the
+    # line of the template it came from. ERB templates keep their line numbers by carrying the
+    # template's own newlines into the compiled Ruby. A template in another language (Slim)
+    # compiles from a tree whose ERB has no newlines of its own, so the compiler asks for each
+    # piece of code to be moved down to its line instead. Code that already sits past its line
+    # stays where it is, so a Ruby error is reported on the template line or just before it.
+    # : (Integer) -> void
+    def align_to_source_line: (Integer) -> void
+
     def with_buffer: () ?{ (?) -> untyped } -> untyped
 
     def terminate_expression: () -> untyped
@@ -113,6 +126,26 @@ module Herb
     def raise_for: (Array[Herb::Diagnostic], String) -> void
 
     def context_options: (untyped properties) -> untyped
+
+    # The template language, from the `language` option, a `language` parser option, or the
+    # extension of `filename`, in that order. Anything but a `.slim` file is ERB.
+    # : (Hash[Symbol, untyped]) -> String
+    def resolve_language: (Hash[Symbol, untyped]) -> String
+
+    # What compiling Slim changes about the engine's options. Slim's whitespace is already exact in
+    # the tree it parses to, so the ERB trim rules that fold the whitespace around a standalone
+    # `<% %>` tag must not apply to it. And Slim HTML-escapes `=` and leaves `==` alone wherever
+    # the output lands, in an attribute or a `<script>` too, so the context-aware escape functions
+    # are turned off and every escaped output goes through `escapefunc`.
+    # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def language_properties: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+    # A Slim template is parsed with the project's Slim settings (`slim:` in `.herb.yml`), which
+    # parser options passed to the engine override, and always with `exact_semantics`, which is
+    # what makes the tree render what the Slim gem renders. Locations are kept so the compiled
+    # Ruby can be aligned to the Slim source.
+    # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def language_parser_options: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
     # : () -> Hash[Symbol, untyped]
     def parse_options: () -> Hash[Symbol, untyped]

@@ -19,6 +19,8 @@ module Herb
         @source_lines = options[:source]&.lines
         @escape = options.fetch(:escape) { options.fetch(:escape_html, false) }
         @trim = options[:trim] != false
+        @align_lines = !["erb", ""].include?(options[:language].to_s)
+        @source_lines_at = {} #: Hash[Integer, Integer]
         @literal_prefix = options[:literal_prefix] || "<%"
         @literal_postfix = options[:literal_postfix] || "%>"
         @tokens = [] #: Array[untyped]
@@ -46,7 +48,9 @@ module Herb
       end
 
       def generate_output
-        optimized_tokens.each do |type, value, context, escaped|
+        optimized_tokens.each do |type, value, context, escaped, line|
+          @engine.send(:align_to_source_line, line) if line
+
           case type
           when :text
             @engine.send(:add_text, value)
@@ -172,6 +176,7 @@ module Herb
       end
 
       def visit_ruby_literal_node(node)
+        mark_source_line(node)
         add_expression(node.content)
       end
 
@@ -250,6 +255,8 @@ module Herb
 
             code_index = @tokens.length
             raw = head ? head.content.value + node.content.value : node.content.value
+
+            mark_source_line(head || node, code_index)
 
             apply_trim(head || node, raw.strip)
             keep_line_count(node, at: code_index, raw: raw)
@@ -339,6 +346,8 @@ module Herb
           code = ::Herb::Engine::Helpers.strip_trailing_comment(node.content.value.strip)
           code_index = @tokens.length
 
+          mark_source_line(node, code_index)
+
           @tokens << if should_escape
                        [:expr_block_escaped, code, current_context]
                      else
@@ -377,6 +386,8 @@ module Herb
         remove_trailing_whitespace_from_last_token! if @trim && left_trim?(node)
 
         code = ::Herb::Engine::Helpers.strip_trailing_comment(node.content.value.strip)
+
+        mark_source_line(node)
 
         if @trim && at_line_start?
           leading_space = extract_and_remove_leading_space!
@@ -497,8 +508,11 @@ module Herb
         end
 
         code = ::Herb::Engine::Helpers.strip_trailing_comment(node.content.value.strip)
+        code = single_line_synthetic_code(node, code)
 
         code_index = @tokens.length
+
+        mark_source_line(node, code_index)
 
         if erb_output?(opening)
           process_erb_output(node, opening, code)
@@ -511,8 +525,38 @@ module Herb
         keep_line_count(node, at: code_index, absorbed: absorbed)
       end
 
+      # Records the template line the token about to be written at `index` came from, for a template
+      # whose compiled Ruby is aligned to its source by line (see `Engine#align_to_source_line`).
+      # Nodes a visitor built have no location (line 0) and are left where they fall.
+      #: (untyped, ?Integer) -> void
+      def mark_source_line(node, index = @tokens.length)
+        return unless @align_lines
+
+        line = node.location&.start&.line.to_i
+
+        @source_lines_at[index] ||= line if line.positive?
+      end
+
+      # Code the parser generated rather than read from the template (a zero-width node, like the
+      # helpers a Slim document with splats starts with) has no template lines to keep, so in a
+      # template aligned by line it is folded onto one line when it still parses that way.
+      #: (untyped, String) -> String
+      def single_line_synthetic_code(node, code)
+        return code unless @align_lines && code.include?("\n")
+
+        location = node.location
+
+        return code unless location && location.start.line == location.end.line && location.start.column == location.end.column
+
+        folded = code.lines.map(&:strip).reject(&:empty?).join("; ")
+
+        ::Herb::Engine::Helpers.valid_ruby?(folded) ? folded : code
+      end
+
       #: (untyped, ?extra: Integer) -> void
       def keep_span_line_count(node, extra: 0)
+        return if @align_lines
+
         lines = node.content.value.count("\n") + extra
 
         return unless lines.positive?
@@ -522,6 +566,8 @@ module Herb
       end
 
       def keep_line_count(node, extra: 0, at: nil, absorbed: 0, raw: nil)
+        return if @align_lines
+
         raw ||= node.content.value
 
         leading = raw[0, raw.length - raw.lstrip.length].to_s.count("\n")
@@ -581,7 +627,7 @@ module Herb
         current_text = nil #: String?
         current_context = nil
 
-        tokens.each do |token|
+        tokens.each_with_index do |token, index|
           type = token[0]
 
           if type == :text
@@ -602,7 +648,7 @@ module Herb
               current_context = nil
             end
 
-            optimized << [type, token[1], token[2], token[3]]
+            optimized << [type, token[1], token[2], token[3], @source_lines_at[index]]
           end
         end
 
