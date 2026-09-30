@@ -1,0 +1,16 @@
+---
+source: "Slim::EngineTest#test_0001_compiles Slim with the language option"
+input: "{source: \"doctype html\\n/ A comment\\n  spanning lines\\n#main.box class=klass\\n  p Hello \\\#{name}\\n  ul\\n    - items.each do |item|\\n      li = item\\n  - if items.size > 1\\n    span.big data-count=items.size == items.first\\n  p = boom\\n\", options: {language: \"slim\", escape: true}}"
+---
+__herb = ::Herb::Engine; _buf = ::String.new; _buf << '<!DOCTYPE html><div id="main" class="'.freeze;
+
+
+ _buf << __herb.h((["box", [klass]].flatten.map(&:to_s).reject(&:empty?).join(" "))); _buf << '"><p>Hello '.freeze;
+ _buf << __herb.h((name)); _buf << '</p><ul>'.freeze;
+
+ items.each do |item|; _buf << '<li>'.freeze;
+ _buf << __herb.h((item)); _buf << '</li>'.freeze; end; _buf << '</ul>'.freeze;
+ if items.size > 1; _buf << '<span class="big"'.freeze;
+ if (_slim_data_count = items.size) == true; _buf << ' data-count'.freeze; elsif _slim_data_count; _buf << ' data-count="'.freeze; _buf << __herb.h((_slim_data_count)); _buf << '"'.freeze; end; _buf << '>'.freeze; _buf << (items.first).to_s; _buf << '</span>'.freeze; end; _buf << '<p>'.freeze;
+ _buf << __herb.h((boom)); _buf << '</p></div>'.freeze;
+_buf.to_s

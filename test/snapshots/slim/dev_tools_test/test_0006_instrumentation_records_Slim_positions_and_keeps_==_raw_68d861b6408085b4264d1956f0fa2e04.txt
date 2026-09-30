@@ -1,0 +1,10 @@
+---
+source: "Slim::DevToolsTest#test_0006_instrumentation records Slim positions and keeps == raw"
+input: "{source: \".card\\n  h1 = title\\n  p Hello \\\#{name}\\n  p == raw_html\\n  p Raw \\\#{{raw_html}}\\n\", options: {filename: \"app/views/posts/_card.html.slim\", escape: true, visitors: [#<Herb::Engine::InstrumentationVisitor>]}}"
+---
+__herb = ::Herb::Engine; _buf = ::String.new; ::Herb::Engine::Runtime::Session.enter_render("app/views/posts/_card.html.slim"); begin; _buf << '<div class="card"><h1>'.freeze;
+ _buf << __herb.h((::Herb::Engine::Runtime::Session.output("app/views/posts/_card.html.slim", 2, 5, nil, end_line: 2, end_column: 12) { title })); _buf << '</h1><p>Hello '.freeze;
+ _buf << __herb.h((::Herb::Engine::Runtime::Session.output("app/views/posts/_card.html.slim", 3, 10, nil, end_line: 3, end_column: 16) { name })); _buf << '</p><p>'.freeze;
+ _buf << (::Herb::Engine::Runtime::Session.output("app/views/posts/_card.html.slim", 4, 4, nil, end_line: 4, end_column: 15) { raw_html }).to_s; _buf << '</p><p>Raw '.freeze;
+ _buf << (::Herb::Engine::Runtime::Session.output("app/views/posts/_card.html.slim", 5, 8, nil, end_line: 5, end_column: 19) { raw_html }).to_s; _buf << '</p></div>'.freeze; ensure; ::Herb::Engine::Runtime::Session.leave_render; end;
+_buf.to_s
