@@ -150,6 +150,17 @@ static void record_ruby(
   hb_array_append(builder->ruby_segments, segment);
 }
 
+void indented_builder_record_source_ruby(indented_builder_T* builder, uint32_t from, uint32_t to) {
+  record_ruby(
+    builder,
+    hb_string_from_data(builder->source->source + from, to - from),
+    from,
+    to,
+    indented_builder_position(builder, from),
+    indented_builder_position(builder, to)
+  );
+}
+
 // A few leading characters would change the meaning of the printed ERB tag (`<%%`, `<%#`, `<%==`, `<%-`),
 // and a few trailing ones the meaning of its closing tag (`-%>`, `%%>`, `=%>`). Those get padded with a space.
 static bool needs_leading_padding(char character) {

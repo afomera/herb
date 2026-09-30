@@ -134,6 +134,9 @@ AST_HTML_ATTRIBUTE_NODE_T* indented_attribute_node(
   uint32_t to
 );
 
+// Adds Ruby code from the source that isn't an ERB node (e.g. an attribute splat) to the document's Ruby program.
+void indented_builder_record_source_ruby(indented_builder_T* builder, uint32_t from, uint32_t to);
+
 // The Ruby code of every ERB node built so far, for `herb_analyze_parse_tree_with_ruby_program`.
 // Valid until `indented_builder_free`.
 herb_ruby_program_T indented_builder_ruby_program(const indented_builder_T* builder);

@@ -74,3 +74,47 @@ indented_ruby_kind_T indented_ruby_classify(const char* code, size_t length) {
 
   return INDENTED_RUBY_INVALID;
 }
+
+size_t indented_ruby_inline_case_branch(const char* code, size_t length) {
+  size_t offset = 0;
+
+  while (offset < length && (code[offset] == ' ' || code[offset] == '\t')) {
+    offset++;
+  }
+
+  if (!starts_with_keyword(code + offset, length - offset, "case")) { return 0; }
+
+  char* buffer = malloc(length + 5);
+  if (!buffer) { return 0; }
+
+  memcpy(buffer, code, length);
+  memcpy(buffer + length, "\nend", 5);
+
+  pm_parser_t parser;
+  pm_options_t options = { 0, .partial_script = true };
+  pm_parser_init(&parser, (const uint8_t*) buffer, length + 4, &options);
+  pm_node_t* root = pm_parse(&parser);
+
+  size_t branch = 0;
+
+  if (parser.error_list.size == 0 && root->type == PM_PROGRAM_NODE) {
+    pm_statements_node_t* statements = ((pm_program_node_t*) root)->statements;
+    pm_node_t* node = statements && statements->body.size == 1 ? statements->body.nodes[0] : NULL;
+    const pm_node_list_t* conditions = NULL;
+
+    if (node && node->type == PM_CASE_NODE) { conditions = &((pm_case_node_t*) node)->conditions; }
+    if (node && node->type == PM_CASE_MATCH_NODE) { conditions = &((pm_case_match_node_t*) node)->conditions; }
+
+    if (conditions && conditions->size > 0) {
+      size_t start = (size_t) (conditions->nodes[0]->location.start - (const uint8_t*) buffer);
+      if (start < length) { branch = start; }
+    }
+  }
+
+  pm_node_destroy(&parser, root);
+  pm_parser_free(&parser);
+  pm_options_free(&options);
+  free(buffer);
+
+  return branch;
+}

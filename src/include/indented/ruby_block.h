@@ -20,4 +20,8 @@ typedef enum {
 
 indented_ruby_kind_T indented_ruby_classify(const char* code, size_t length);
 
+// `case x when y` on a single line: the offset of the first `when` (or `in`) branch, so that the `case` and the
+// branch can become separate ERB tags, the way ERB analysis expects them. 0 for any other code.
+size_t indented_ruby_inline_case_branch(const char* code, size_t length);
+
 #endif
