@@ -10,8 +10,10 @@
 //   attr="x #{y}"                -> HTMLAttributeNode, value children LiteralNode + ERBContentNode (`<%=`)
 //   attr=ruby / attr==ruby       -> HTMLAttributeNode with a `<%= ruby %>` / `<%== ruby %>` value
 //   attr=true / attr=false|nil   -> boolean attribute / attribute omitted (like Slim does for literals)
-//   .a.b class="c"               -> a single merged `class` attribute (Slim merges class values)
-//   *splat                       -> ERBContentNode `<%= tag.attributes(**splat) %>` in the open tag (TODO)
+//   .a.b class="c" class=d       -> a single merged `class` attribute: "a", " ", "b", " ", `<%= d %>`
+//   *splat / data=h / aria=h     -> RubyHTMLAttributesSplatNode `tag.attributes(**splat)` / `tag.attributes(data: h)`
+//   *{ tag: "h1", id: x } Text   -> HTMLElementNode `h1` with a `tag.attributes(**{ id: x })` splat
+//   *attrs Text                  -> `<%= content_tag(attrs[:tag] || :div, attrs.except(:tag)) do %>Text<% end %>`
 //   | text, ' text, inline text  -> HTMLTextNode (+ ERBContentNode for `#{}` interpolation)
 //   <inline html>                -> HTMLTextNode (+ interpolation), indented content follows as siblings
 //   - code                       -> ERBContentNode `<% code %>` + indented content + synthetic `<% end %>`
@@ -20,6 +22,16 @@
 //   /! comment                   -> HTMLCommentNode
 //   doctype html                 -> HTMLDoctypeNode
 //   javascript: / css:           -> <script> / <style> HTMLElementNode with LiteralNode body
+//
+// Exact semantics (`exact_semantics: true`): the tree above is source-faithful, but its HTML+ERB does not always
+// render what Slim renders (`href=nil` omits the attribute in Slim, class Arrays are flattened, splats merge
+// with the other attributes, ...). With `exact_semantics`, those runtime semantics are lowered into the tree:
+//
+//   href=@url                    -> <% if @url == true %> href<% elsif @url %> href="<%= @url %>"<% end %>
+//   href=url_for(x)              -> the same, through a `_slim_href` temporary (evaluated once)
+//   class=x                      -> class="<%= [x].flatten.map(&:to_s).reject(&:empty?).join(" ") %>" (or omitted)
+//   *splat, data=, aria=, *tag   -> `_slim_splat` (Slim::Splat::Builder in plain Ruby, defined once at the top)
+//   literal `<%` in text         -> `<%== "<" + "%" %>`
 //
 // Slim does not emit any whitespace between tags, so no whitespace nodes are created for
 // indentation or newlines. The only whitespace in the tree is the one Slim renders: the
@@ -44,11 +56,25 @@
 #include "../include/util/html_util.h"
 #include "../include/visitor.h"
 
+#include <prism.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define SLIM_TAB_SIZE 4
+
+#define SLIM_SHORTCUT_MAX_ATTRIBUTES 8
+
+// One entry of `slim_shortcuts` (Slim's `shortcut` option): `.` => class, `#` => id, ...
+typedef struct {
+  hb_string_T key;
+  hb_string_T tag; // the tag of a line starting with the shortcut (`div` unless configured)
+  hb_string_T attributes[SLIM_SHORTCUT_MAX_ATTRIBUTES];
+  size_t attribute_count; // 0 for a tag-only shortcut
+  hb_string_T additional[SLIM_SHORTCUT_MAX_ATTRIBUTES * 2]; // Slim's `additional_attrs`: static name/value pairs
+  size_t additional_count;
+} slim_shortcut_T;
 
 typedef struct {
   indented_source_T source;
@@ -63,6 +89,10 @@ typedef struct {
   hb_allocator_T* allocator;
   uint32_t dynamic_tag_count;
   bool uses_splat_helper;
+  // `exact_semantics`: lower Slim's runtime semantics into the tree (see the "Exact semantics" notes below).
+  bool exact;
+  slim_shortcut_T* shortcuts;
+  size_t shortcut_count;
 } slim_parser_T;
 
 typedef struct {
@@ -86,10 +116,14 @@ typedef enum {
   SLIM_CLASS_CODE,     // class=ruby
 } slim_class_kind_T;
 
-// One `class` value. Slim merges all of them into a single attribute (Temple::HTML::AttributeMerger),
-// so they are collected while parsing the tag and emitted once the attributes are complete.
+// One value of a merged attribute (`class`, or any other name in `slim_merge_attrs`). Slim merges all of them into
+// a single attribute (Temple::HTML::AttributeMerger), so they are collected while parsing the tag and emitted once
+// the attributes are complete.
 typedef struct {
   slim_class_kind_T kind;
+  hb_string_T name;      // the merged attribute's name (`class` by default, see `slim_merge_attrs`)
+  hb_string_T separator; // what its values are joined with
+  size_t index;          // where the merged attribute goes in the open tag's children
   uint32_t name_from;
   uint32_t name_to;
   uint32_t from; // shortcut value, quoted content or Ruby code
@@ -118,11 +152,11 @@ typedef struct {
   uint32_t to;
   hb_array_T* children; // quoted value children
   bool raw;
+  hb_string_T value; // a static value that isn't in the source (a shortcut's `additional_attrs`)
 } slim_attribute_spec_T;
 
 typedef struct {
-  hb_array_T* class_parts; // slim_class_part_T*
-  size_t class_index;      // where the merged class attribute goes in the open tag's children
+  hb_array_T* class_parts; // slim_class_part_T*, the values of merged attributes
   hb_array_T* names;       // hb_string_T* of the other attribute names, to report duplicates
   hb_array_T* specs;       // slim_attribute_spec_T*
   bool splat;              // a `*splat` or a `data=`/`aria=` Ruby value (Slim's hyphen_attrs) was given
@@ -341,14 +375,15 @@ static void text_emit(slim_parser_T* parser, slim_text_T* text, hb_string_T cont
 }
 
 // Slim renders text verbatim, so a literal `<%` (or `%>`) must not turn into an ERB tag once the tree is printed
-// as HTML+ERB. It is emitted as the ERB output `<%== "<" + "%" %>` (`<%== "%" + ">" %>`), which renders exactly
+// as HTML+ERB. With exact semantics it is emitted as the ERB output `<%== "<" + "%" %>` (`<%== "%" + ">" %>`), which renders exactly
 // `<%` in any context (including <script> and <style> bodies, where an HTML entity would not be decoded).
 static void text_flush(slim_parser_T* parser, slim_text_T* text) {
   hb_string_T content = hb_string_from_data(hb_buffer_value(&text->buffer), hb_buffer_length(&text->buffer));
   uint32_t segment_start = 0;
   uint32_t from = text->from;
 
-  for (uint32_t index = 0; index + 1 < content.length; index++) {
+  // The source-faithful tree keeps the text as it is; printers escape `<%` when they print it as HTML+ERB.
+  for (uint32_t index = 0; parser->exact && index + 1 < content.length; index++) {
     bool opener = content.data[index] == '<' && content.data[index + 1] == '%';
     bool closer = content.data[index] == '%' && content.data[index + 1] == '>';
     if (!opener && !closer) { continue; }
@@ -655,7 +690,22 @@ static void parse_control(slim_parser_T* parser, hb_array_T* output, slim_block_
     kind = INDENTED_RUBY_OPENS_END;
   }
 
-  if (code_to > code_from) {
+  size_t branch = kind == INDENTED_RUBY_OPENS_END && code_to > code_from
+                  ? indented_ruby_inline_case_branch(parser->text + code_from, code_to - code_from)
+                  : 0;
+
+  if (branch > 0) {
+    // `- case x when y`: `<% case x %><% when y %>`.
+    uint32_t case_to = code_from + (uint32_t) branch;
+    uint32_t when_from = case_to;
+
+    while (case_to > code_from && indented_is_space(parser->text[case_to - 1])) {
+      case_to--;
+    }
+
+    hb_array_append(output, indented_erb_node(&parser->builder, "<%", start, code_from, case_to, NULL, NULL));
+    hb_array_append(output, indented_erb_node(&parser->builder, "<%", when_from, when_from, code_to, suffix, NULL));
+  } else if (code_to > code_from) {
     hb_array_append(output, indented_erb_node(&parser->builder, "<%", start, code_from, code_to, suffix, NULL));
   }
 
@@ -780,13 +830,22 @@ static uint32_t parse_ruby_code(slim_parser_T* parser, char outer_delimiter) {
   return code_to;
 }
 
-static bool is_class_attribute(hb_string_T name) {
-  return hb_string_equals(name, hb_string("class"));
+// Whether `name` is a merged attribute (`slim_merge_attrs`, Slim's `merge_attrs`), and its separator.
+static bool merge_separator(const slim_parser_T* parser, hb_string_T name, hb_string_T* separator) {
+  const parser_options_T* options = parser->options;
+
+  for (size_t index = 0; index < options->slim_merge_attr_count; index++) {
+    if (!hb_string_equals(options->slim_merge_attrs[index * 2], name)) { continue; }
+
+    if (separator) { *separator = options->slim_merge_attrs[index * 2 + 1]; }
+    return true;
+  }
+
+  return false;
 }
 
 static void attributes_init(slim_parser_T* parser, slim_attributes_T* attributes) {
   attributes->class_parts = hb_array_init(2, parser->allocator);
-  attributes->class_index = 0;
   attributes->names = hb_array_init(4, parser->allocator);
   attributes->specs = hb_array_init(4, parser->allocator);
   attributes->splat = false;
@@ -814,6 +873,39 @@ static void record_spec(
       && (hb_string_equals(name, hb_string("data")) || hb_string_equals(name, hb_string("aria")))) {
     attributes->splat = true;
   }
+}
+
+// `*splat` (prefix empty) or `data=hash` / `aria=hash` (Slim's hyphen_attrs) as a RubyHTMLAttributesSplatNode,
+// in the same shape the ActionView tag helper analysis uses: `tag.attributes(**splat)` / `tag.attributes(data: hash)`.
+static AST_NODE_T* splat_node(slim_parser_T* parser, hb_string_T prefix, uint32_t from, uint32_t code_from, uint32_t code_to) {
+  hb_buffer_T content;
+  hb_buffer_init(&content, code_to - code_from + 32, parser->allocator);
+
+  if (prefix.length > 0) {
+    hb_buffer_append(&content, "tag.attributes(");
+    hb_buffer_append_string(&content, prefix);
+    hb_buffer_append(&content, ": ");
+  } else {
+    hb_buffer_append(&content, "tag.attributes(**");
+  }
+
+  hb_buffer_append_string(&content, source_slice(parser, code_from, code_to));
+  hb_buffer_append(&content, ")");
+
+  indented_builder_record_source_ruby(&parser->builder, code_from, code_to);
+
+  AST_NODE_T* node = (AST_NODE_T*) ast_ruby_html_attributes_splat_node_init(
+    hb_string_from_data(hb_buffer_value(&content), hb_buffer_length(&content)),
+    prefix,
+    indented_builder_position(&parser->builder, from),
+    indented_builder_position(&parser->builder, code_to),
+    NULL,
+    parser->allocator
+  );
+
+  hb_buffer_free(&content);
+
+  return node;
 }
 
 static void attributes_free(slim_parser_T* parser, slim_attributes_T* attributes) {
@@ -1035,33 +1127,99 @@ static void free_class_part_nodes(slim_parser_T* parser, slim_class_part_T* part
   part->equals = part->open_quote = part->close_quote = NULL;
 }
 
-// Emits the merged `class` attribute (Temple::HTML::AttributeMerger + Slim::CodeAttributes + AttributeRemover):
+// Appends `separator` to `buffer` as the content of a Ruby double-quoted string literal.
+static void append_ruby_string_literal(hb_buffer_T* buffer, hb_string_T text) {
+  hb_buffer_append_char(buffer, '"');
+  append_ruby_string_content(buffer, text);
+  hb_buffer_append_char(buffer, '"');
+}
+
+// `class=:a,:b`: Slim assigns the code to a variable (`tmp = :a,:b`), which makes a comma list an Array.
+static bool has_top_level_comma(hb_string_T code) {
+  int depth = 0;
+  char quote = '\0';
+
+  for (uint32_t offset = 0; offset < code.length; offset++) {
+    char character = code.data[offset];
+
+    if (quote) {
+      if (character == '\\') {
+        offset++;
+      } else if (character == quote) {
+        quote = '\0';
+      }
+      continue;
+    }
+
+    if (character == '"' || character == '\'') {
+      quote = character;
+    } else if (character == '(' || character == '[' || character == '{') {
+      depth++;
+    } else if (character == ')' || character == ']' || character == '}') {
+      depth--;
+    } else if (character == ',' && depth == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// The source-faithful ERB output of a Ruby attribute value; a comma list is wrapped in `[...]`.
+static AST_NODE_T* code_value_node(slim_parser_T* parser, bool raw, uint32_t code_from, uint32_t code_to) {
+  hb_string_T code = source_slice(parser, code_from, code_to);
+
+  if (!has_top_level_comma(code)) {
+    return indented_erb_node(&parser->builder, raw ? "<%==" : "<%=", code_from, code_from, code_to, NULL, NULL);
+  }
+
+  hb_buffer_T wrapped;
+  hb_buffer_init(&wrapped, code.length + 4, parser->allocator);
+  hb_buffer_append(&wrapped, "[");
+  hb_buffer_append_string(&wrapped, code);
+  hb_buffer_append(&wrapped, "]");
+
+  AST_NODE_T* node = indented_erb_node(
+    &parser->builder,
+    raw ? "<%==" : "<%=",
+    code_from,
+    code_from,
+    code_to,
+    NULL,
+    hb_buffer_value(&wrapped)
+  );
+
+  hb_buffer_free(&wrapped);
+
+  return node;
+}
+
+// Builds one merged attribute (Temple::HTML::AttributeMerger + Slim::CodeAttributes + AttributeRemover) out of its
+// values, `class` by default (`slim_merge_attrs`):
 //
-//   - every value has static text:  class="a b#{c}"         (values joined with " ", like Slim)
-//   - some value is Ruby:           class="<%= ["a", b].flatten.map(&:to_s).reject(&:empty?).join(" ") %>"
+//   - every value has static text:  class="a b#{c}"         (values joined with the separator, like Slim)
+//   - some value is Ruby, source-faithful tree: class="a <%= b %>"
+//   - some value is Ruby, exact semantics:
+//                                   class="<%= ["a", b].flatten.map(&:to_s).reject(&:empty?).join(" ") %>"
 //     (Arrays are flattened and joined, empty values dropped), and when nothing static guarantees a
 //     non-empty value, the attribute is omitted when empty, like Slim does:
 //                                   <% unless (_slim_class = [...]...join(" ")).empty? %>class="<%= _slim_class %>"<%
 //                                   end %>
-static void emit_class_attribute(
-  slim_parser_T* parser,
-  AST_HTML_OPEN_TAG_NODE_T* open_tag,
-  slim_attributes_T* attributes
-) {
-  size_t count = hb_array_size(attributes->class_parts);
-  if (count == 0) { return; }
-
+static hb_array_T* build_merged_attribute(slim_parser_T* parser, hb_array_T* parts, bool* conditional) {
+  size_t count = hb_array_size(parts);
   hb_array_T* nodes = hb_array_init(4, parser->allocator);
-  bool conditional = false;
-  slim_class_part_T* first = hb_array_get(attributes->class_parts, 0);
-  slim_class_part_T* last = hb_array_last(attributes->class_parts);
+  slim_class_part_T* first = hb_array_get(parts, 0);
+  slim_class_part_T* last = hb_array_last(parts);
+  hb_string_T name = first->name;
+  hb_string_T separator = first->separator;
 
   bool all_static = true;
   bool any_static = false;
   bool all_raw = true;
+  *conditional = false;
 
   for (size_t index = 0; index < count; index++) {
-    slim_class_part_T* part = hb_array_get(attributes->class_parts, index);
+    slim_class_part_T* part = hb_array_get(parts, index);
     bool has_static = class_part_has_static(part);
 
     all_static = all_static && has_static;
@@ -1074,7 +1232,7 @@ static void emit_class_attribute(
 
     AST_HTML_ATTRIBUTE_NODE_T* attribute = indented_attribute_node(
       &parser->builder,
-      indented_attribute_name_node(&parser->builder, hb_string("class"), first->name_from, first->name_to),
+      indented_attribute_name_node(&parser->builder, name, first->name_from, first->name_to),
       first->equals,
       first->open_quote,
       first->children,
@@ -1083,16 +1241,25 @@ static void emit_class_attribute(
       first->to + 1
     );
 
+    first->equals = first->open_quote = first->close_quote = NULL;
+    first->children = NULL;
     hb_array_append(nodes, attribute);
-  } else if (all_static) {
+  } else if (all_static || !parser->exact) {
+    // The values in order, joined with the separator (Ruby values as ERB output in the source-faithful tree).
     hb_array_T* children = hb_array_init(count * 2, parser->allocator);
 
     for (size_t index = 0; index < count; index++) {
-      slim_class_part_T* part = hb_array_get(attributes->class_parts, index);
+      slim_class_part_T* part = hb_array_get(parts, index);
 
       if (index > 0) {
-        hb_array_append(children, indented_literal_node(&parser->builder, hb_string(" "), part->from, part->from));
+        hb_array_append(children, indented_literal_node(&parser->builder, separator, part->from, part->from));
       }
+
+      if (part->kind == SLIM_CLASS_CODE) {
+        hb_array_append(children, code_value_node(parser, part->raw, part->from, part->to));
+        continue;
+      }
+
       if (part->kind == SLIM_CLASS_QUOTED && !part->raw) { escape_literal_children(parser, part->children); }
 
       for (size_t child = 0; child < hb_array_size(part->children); child++) {
@@ -1107,7 +1274,7 @@ static void emit_class_attribute(
       nodes,
       indented_attribute_node(
         &parser->builder,
-        indented_attribute_name_node(&parser->builder, hb_string("class"), first->name_from, first->name_to),
+        indented_attribute_name_node(&parser->builder, name, first->name_from, first->name_to),
         indented_synthetic_token(&parser->builder, "=", TOKEN_EQUALS, first->from),
         indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, first->from),
         children,
@@ -1122,14 +1289,16 @@ static void emit_class_attribute(
     hb_buffer_append(&expression, "[");
 
     for (size_t index = 0; index < count; index++) {
-      slim_class_part_T* part = hb_array_get(attributes->class_parts, index);
+      slim_class_part_T* part = hb_array_get(parts, index);
 
       if (index > 0) { hb_buffer_append(&expression, ", "); }
       append_class_part_ruby(parser, &expression, part);
       free_class_part_nodes(parser, part);
     }
 
-    hb_buffer_append(&expression, "].flatten.map(&:to_s).reject(&:empty?).join(\" \")");
+    hb_buffer_append(&expression, "].flatten.map(&:to_s).reject(&:empty?).join(");
+    append_ruby_string_literal(&expression, separator);
+    hb_buffer_append(&expression, ")");
 
     const char* opening = all_raw ? "<%==" : "<%=";
     hb_buffer_T content;
@@ -1158,7 +1327,7 @@ static void emit_class_attribute(
         nodes,
         indented_attribute_node(
           &parser->builder,
-          indented_attribute_name_node(&parser->builder, hb_string("class"), first->name_from, first->name_to),
+          indented_attribute_name_node(&parser->builder, name, first->name_from, first->name_to),
           indented_synthetic_token(&parser->builder, "=", TOKEN_EQUALS, first->from),
           indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, first->from),
           children,
@@ -1168,7 +1337,21 @@ static void emit_class_attribute(
         )
       );
     } else {
-      hb_buffer_append(&content, " unless (_slim_class = ");
+      hb_buffer_T variable;
+      hb_buffer_init(&variable, name.length + 16, parser->allocator);
+      hb_buffer_append(&variable, "_slim_");
+
+      for (uint32_t offset = 0; offset < name.length; offset++) {
+        char character = name.data[offset];
+        bool plain = (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')
+                  || (character >= '0' && character <= '9') || character == '_';
+
+        hb_buffer_append_char(&variable, plain ? character : '_');
+      }
+
+      hb_buffer_append(&content, " unless (");
+      hb_buffer_append(&content, hb_buffer_value(&variable));
+      hb_buffer_append(&content, " = ");
       hb_buffer_append(&content, hb_buffer_value(&expression));
       hb_buffer_append(&content, ").empty? ");
 
@@ -1177,16 +1360,21 @@ static void emit_class_attribute(
         indented_erb_node(&parser->builder, "<%", first->from, first->from, last->to, NULL, hb_buffer_value(&content))
       );
       hb_array_append(nodes, indented_whitespace_node(&parser->builder, first->name_from));
-      conditional = true;
+      *conditional = true;
+
+      hb_buffer_clear(&content);
+      hb_buffer_append(&content, " ");
+      hb_buffer_append(&content, hb_buffer_value(&variable));
+      hb_buffer_append(&content, " ");
 
       hb_array_T* children = hb_array_init(1, parser->allocator);
-      hb_array_append(children, indented_synthetic_erb_node(&parser->builder, opening, " _slim_class ", last->to));
+      hb_array_append(children, indented_synthetic_erb_node(&parser->builder, opening, hb_buffer_value(&content), last->to));
 
       hb_array_append(
         nodes,
         indented_attribute_node(
           &parser->builder,
-          indented_attribute_name_node(&parser->builder, hb_string("class"), first->name_from, first->name_to),
+          indented_attribute_name_node(&parser->builder, name, first->name_from, first->name_to),
           indented_synthetic_token(&parser->builder, "=", TOKEN_EQUALS, last->to),
           indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, last->to),
           children,
@@ -1197,23 +1385,69 @@ static void emit_class_attribute(
       );
 
       hb_array_append(nodes, indented_synthetic_erb_node(&parser->builder, "<%", " end ", last->to));
+      hb_buffer_free(&variable);
     }
 
     hb_buffer_free(&content);
     hb_buffer_free(&expression);
   }
 
-  // Insert the nodes where the first class value appeared, preceded by a whitespace node (inside the
-  // condition when the attribute can be omitted).
-  hb_array_T* children = hb_array_init(hb_array_size(open_tag->children) + hb_array_size(nodes) + 1, parser->allocator);
-  size_t insert_at = attributes->class_index;
+  return nodes;
+}
+
+// Emits every merged attribute where its first value appeared, preceded by a whitespace node (inside the
+// condition when the attribute can be omitted).
+static void emit_class_attribute(
+  slim_parser_T* parser,
+  AST_HTML_OPEN_TAG_NODE_T* open_tag,
+  slim_attributes_T* attributes
+) {
+  size_t count = hb_array_size(attributes->class_parts);
+  if (count == 0) { return; }
+
+  // Group the values by attribute name, in the order the names first appear.
+  hb_array_T* groups = hb_array_init(2, parser->allocator);
+
+  for (size_t index = 0; index < count; index++) {
+    slim_class_part_T* part = hb_array_get(attributes->class_parts, index);
+    hb_array_T* group = NULL;
+
+    for (size_t existing = 0; existing < hb_array_size(groups); existing++) {
+      hb_array_T* candidate = hb_array_get(groups, existing);
+
+      if (hb_string_equals(((slim_class_part_T*) hb_array_first(candidate))->name, part->name)) {
+        group = candidate;
+        break;
+      }
+    }
+
+    if (!group) {
+      group = hb_array_init(2, parser->allocator);
+      hb_array_append(groups, group);
+    }
+
+    hb_array_append(group, part);
+  }
+
+  size_t group_count = hb_array_size(groups);
+  hb_array_T** built = hb_allocator_alloc(parser->allocator, sizeof(hb_array_T*) * group_count);
+  bool* conditional = hb_allocator_alloc(parser->allocator, sizeof(bool) * group_count);
+
+  for (size_t group = 0; group < group_count; group++) {
+    built[group] = build_merged_attribute(parser, hb_array_get(groups, group), &conditional[group]);
+  }
+
+  hb_array_T* children = hb_array_init(hb_array_size(open_tag->children) + count * 4 + 1, parser->allocator);
 
   for (size_t index = 0; index <= hb_array_size(open_tag->children); index++) {
-    if (index == insert_at) {
-      if (!conditional) { hb_array_append(children, indented_whitespace_node(&parser->builder, first->name_from)); }
+    for (size_t group = 0; group < group_count; group++) {
+      slim_class_part_T* first = hb_array_first(hb_array_get(groups, group));
+      if (first->index != index) { continue; }
 
-      for (size_t node = 0; node < hb_array_size(nodes); node++) {
-        hb_array_append(children, hb_array_get(nodes, node));
+      if (!conditional[group]) { hb_array_append(children, indented_whitespace_node(&parser->builder, first->name_from)); }
+
+      for (size_t node = 0; node < hb_array_size(built[group]); node++) {
+        hb_array_append(children, hb_array_get(built[group], node));
       }
     }
 
@@ -1222,29 +1456,48 @@ static void emit_class_attribute(
     }
   }
 
+  for (size_t group = 0; group < group_count; group++) {
+    hb_array_T* group_parts = hb_array_get(groups, group);
+    hb_array_free(&group_parts);
+    hb_array_free(&built[group]);
+  }
+
+  hb_allocator_dealloc(parser->allocator, built);
+  hb_allocator_dealloc(parser->allocator, conditional);
+  hb_array_free(&groups);
   hb_array_free(&open_tag->children);
-  hb_array_free(&nodes);
   open_tag->children = children;
 }
 
+// A value of a merged attribute (`class`, or any name in `slim_merge_attrs`).
 static void add_class_part(
   slim_parser_T* parser,
   AST_HTML_OPEN_TAG_NODE_T* open_tag,
   slim_attributes_T* attributes,
   slim_class_part_T part
 ) {
-  if (hb_array_size(attributes->class_parts) == 0) { attributes->class_index = hb_array_size(open_tag->children); }
+  part.index = hb_array_size(open_tag->children);
+  merge_separator(parser, part.name, &part.separator);
+
+  for (size_t index = 0; index < hb_array_size(attributes->class_parts); index++) {
+    slim_class_part_T* existing = hb_array_get(attributes->class_parts, index);
+
+    if (hb_string_equals(existing->name, part.name)) {
+      part.index = existing->index;
+      break;
+    }
+  }
 
   slim_class_part_T* stored = hb_allocator_alloc(parser->allocator, sizeof(slim_class_part_T));
   *stored = part;
   hb_array_append(attributes->class_parts, stored);
 }
 
-// Slim::Splat::Builder (with Slim's defaults: merge_attrs class, hyphen_attrs data/aria, sort_attrs, html
-// format), written in plain Ruby so the printed ERB renders the same without Rails or the slim gem. It is
-// defined once at the top of a document that uses splats or dynamic tags.
+// Slim::Splat::Builder (with Slim's defaults: hyphen_attrs data/aria, sort_attrs, html format, and the configured
+// merge_attrs as `_slim_merge_attrs`), written in plain Ruby so the printed ERB renders the same without Rails or the
+// slim gem. It is defined once at the top of a document that uses splats or dynamic tags.
 static const char* SLIM_SPLAT_HELPER =
-  " _slim_escape = lambda do |value|\n"
+  "_slim_escape = lambda do |value|\n"
   "  if value.respond_to?(:html_safe?) && value.html_safe?\n"
   "    value.to_s\n"
   "  else\n"
@@ -1258,8 +1511,8 @@ static const char* SLIM_SPLAT_HELPER =
   "  add = lambda do |name, value|\n"
   "    if !attributes.key?(name)\n"
   "      attributes[name] = value\n"
-  "    elsif name == \"class\"\n"
-  "      attributes[name] = \"#{attributes[name]} #{value}\"\n"
+  "    elsif (separator = _slim_merge_attrs[name])\n"
+  "      attributes[name] = \"#{attributes[name]}#{separator}#{value}\"\n"
   "    else\n"
   "      raise ArgumentError, \"Multiple #{name} attributes specified\"\n"
   "    end\n"
@@ -1273,8 +1526,8 @@ static const char* SLIM_SPLAT_HELPER =
   "    end\n"
   "  end\n"
   "  code = lambda do |name, value, escaped|\n"
-  "    if name == \"class\"\n"
-  "      value = value.is_a?(Array) ? value.join(\" \") : value.to_s\n"
+  "    if (separator = _slim_merge_attrs[name])\n"
+  "      value = value.is_a?(Array) ? value.join(separator) : value.to_s\n"
   "      add.(name, escape.(value, escaped)) unless value.empty?\n"
   "    elsif (name == \"data\" || name == \"aria\") && value.is_a?(Hash)\n"
   "      hyphen.(name, value, escaped)\n"
@@ -1377,9 +1630,11 @@ static void build_splat_entries(slim_parser_T* parser, slim_attributes_T* attrib
     first = false;
 
     if (part->kind == SLIM_CLASS_CODE) {
-      append_code_entry(parser, buffer, hb_string("class"), part->from, part->to, part->raw);
+      append_code_entry(parser, buffer, part->name, part->from, part->to, part->raw);
     } else {
-      hb_buffer_append(buffer, "[:attr, \"class\", ");
+      hb_buffer_append(buffer, "[:attr, ");
+      append_ruby_name(buffer, part->name);
+      hb_buffer_append(buffer, ", ");
       append_quoted_value_ruby(buffer, part->children, part->kind == SLIM_CLASS_QUOTED && !part->raw);
       hb_buffer_append(buffer, "]");
     }
@@ -1396,7 +1651,7 @@ static void build_splat_entries(slim_parser_T* parser, slim_attributes_T* attrib
         hb_buffer_append(buffer, "[:attr, ");
         append_ruby_name(buffer, spec->name);
         hb_buffer_append(buffer, ", ");
-        append_ruby_name(buffer, source_slice(parser, spec->from, spec->to));
+        append_ruby_name(buffer, spec->value.data ? spec->value : source_slice(parser, spec->from, spec->to));
         hb_buffer_append(buffer, "]");
         break;
 
@@ -1451,7 +1706,7 @@ static void finish_attributes(
   AST_HTML_OPEN_TAG_NODE_T* open_tag,
   slim_attributes_T* attributes
 ) {
-  if (!attributes->splat) {
+  if (!attributes->splat || !parser->exact) {
     emit_class_attribute(parser, open_tag, attributes);
     return;
   }
@@ -1497,7 +1752,7 @@ static void add_code_attribute(
   hb_string_T name = source_slice(parser, name_from, name_to);
   hb_string_T code = source_slice(parser, code_from, code_to);
 
-  if (is_class_attribute(name)) {
+  if (merge_separator(parser, name, NULL)) {
     token_free(equals, parser->allocator);
 
     add_class_part(
@@ -1505,6 +1760,7 @@ static void add_code_attribute(
       open_tag,
       attributes,
       (slim_class_part_T) { .kind = SLIM_CLASS_CODE,
+                            .name = name,
                             .name_from = name_from,
                             .name_to = name_to,
                             .from = code_from,
@@ -1526,6 +1782,36 @@ static void add_code_attribute(
 
   if (hb_string_equals(code, hb_string("false")) || hb_string_equals(code, hb_string("nil"))) {
     token_free(equals, parser->allocator);
+    return;
+  }
+
+  if (!parser->exact) {
+    if (hb_string_equals(name, hb_string("data")) || hb_string_equals(name, hb_string("aria"))) {
+      token_free(equals, parser->allocator);
+      indented_open_tag_append(
+        &parser->builder,
+        open_tag,
+        splat_node(parser, name, name_from, code_from, code_to),
+        name_from
+      );
+      return;
+    }
+
+    hb_array_T* children = hb_array_init(1, parser->allocator);
+    hb_array_append(children, code_value_node(parser, raw, code_from, code_to));
+
+    append_attribute_node(
+      parser,
+      open_tag,
+      name,
+      name_from,
+      name_to,
+      equals,
+      indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, code_from),
+      children,
+      indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, code_to),
+      code_to
+    );
     return;
   }
 
@@ -1625,13 +1911,15 @@ static void add_code_attribute(
   hb_buffer_free(&subject);
 }
 
-// `.class` / `#id` shortcut: a static value, without interpolation.
+// An attribute shortcut (`.class`, `#id`, or any configured in `slim_shortcuts`): a static value, without
+// interpolation. `shortcut_at`..`key_to` is the shortcut character(s).
 static void add_shortcut_attribute(
   slim_parser_T* parser,
   AST_HTML_OPEN_TAG_NODE_T* open_tag,
   slim_attributes_T* attributes,
-  const char* name,
+  hb_string_T name,
   uint32_t shortcut_at,
+  uint32_t key_to,
   uint32_t value_from,
   uint32_t value_to
 ) {
@@ -1642,14 +1930,15 @@ static void add_shortcut_attribute(
     indented_literal_node(&parser->builder, source_slice(parser, value_from, value_to), value_from, value_to)
   );
 
-  if (strcmp(name, "class") == 0) {
+  if (merge_separator(parser, name, NULL)) {
     add_class_part(
       parser,
       open_tag,
       attributes,
       (slim_class_part_T) { .kind = SLIM_CLASS_SHORTCUT,
+                            .name = name,
                             .name_from = shortcut_at,
-                            .name_to = shortcut_at,
+                            .name_to = key_to,
                             .from = value_from,
                             .to = value_to,
                             .children = children }
@@ -1658,20 +1947,68 @@ static void add_shortcut_attribute(
     return;
   }
 
-  note_attribute_name(parser, attributes, hb_string_from_c_string(name), shortcut_at, value_to);
-  record_spec(parser, attributes, SLIM_SPEC_STATIC, hb_string_from_c_string(name), value_from, value_to, NULL, false);
+  note_attribute_name(parser, attributes, name, shortcut_at, value_to);
+  record_spec(parser, attributes, SLIM_SPEC_STATIC, name, value_from, value_to, NULL, false);
 
   append_attribute_node(
     parser,
     open_tag,
-    hb_string_from_c_string(name),
+    name,
     shortcut_at,
-    shortcut_at,
+    key_to,
     indented_synthetic_token(&parser->builder, "=", TOKEN_EQUALS, value_from),
     indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, value_from),
     children,
     indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, value_to),
     value_to
+  );
+}
+
+// A shortcut's `additional_attrs` entry: a static attribute whose value comes from the configuration.
+static void add_additional_attribute(
+  slim_parser_T* parser,
+  AST_HTML_OPEN_TAG_NODE_T* open_tag,
+  slim_attributes_T* attributes,
+  hb_string_T name,
+  hb_string_T value,
+  uint32_t shortcut_at,
+  uint32_t key_to
+) {
+  hb_array_T* children = hb_array_init(1, parser->allocator);
+  hb_array_append(children, indented_literal_node(&parser->builder, value, key_to, key_to));
+
+  if (merge_separator(parser, name, NULL)) {
+    add_class_part(
+      parser,
+      open_tag,
+      attributes,
+      (slim_class_part_T) { .kind = SLIM_CLASS_SHORTCUT,
+                            .name = name,
+                            .name_from = shortcut_at,
+                            .name_to = key_to,
+                            .from = key_to,
+                            .to = key_to,
+                            .children = children }
+    );
+
+    return;
+  }
+
+  note_attribute_name(parser, attributes, name, shortcut_at, key_to);
+  record_spec(parser, attributes, SLIM_SPEC_STATIC, name, key_to, key_to, NULL, false);
+  ((slim_attribute_spec_T*) hb_array_last(attributes->specs))->value = value;
+
+  append_attribute_node(
+    parser,
+    open_tag,
+    name,
+    shortcut_at,
+    key_to,
+    indented_synthetic_token(&parser->builder, "=", TOKEN_EQUALS, key_to),
+    indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, key_to),
+    children,
+    indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, key_to),
+    key_to
   );
 }
 
@@ -1752,9 +2089,19 @@ static void parse_attributes(slim_parser_T* parser, AST_HTML_OPEN_TAG_NODE_T* op
       uint32_t code_from = parser->cursor;
       uint32_t code_to = parse_ruby_code(parser, delimiter);
 
-      // Splats are rendered through the tag's Slim::Splat::Builder equivalent (see `finish_attributes`).
-      (void) splat_at;
+      // With exact semantics, splats are rendered through the tag's Slim::Splat::Builder equivalent (see
+      // `finish_attributes`).
       record_spec(parser, attributes, SLIM_SPEC_SPLAT, hb_string("*"), code_from, code_to, NULL, false);
+
+      if (!parser->exact && code_to > code_from) {
+        indented_open_tag_append(
+          &parser->builder,
+          open_tag,
+          splat_node(parser, HB_STRING_EMPTY, splat_at, code_from, code_to),
+          splat_at
+        );
+      }
+
       continue;
     }
 
@@ -1815,12 +2162,13 @@ static void parse_attributes(slim_parser_T* parser, AST_HTML_OPEN_TAG_NODE_T* op
             close_quote = indented_synthetic_token(&parser->builder, "\"", TOKEN_QUOTE, parser->cursor);
           }
 
-          if (is_class_attribute(name)) {
+          if (merge_separator(parser, name, NULL)) {
             add_class_part(
               parser,
               open_tag,
               attributes,
               (slim_class_part_T) { .kind = SLIM_CLASS_QUOTED,
+                                    .name = name,
                                     .name_from = name_from,
                                     .name_to = name_to,
                                     .from = open_at + 1,
@@ -1876,7 +2224,7 @@ static void parse_attributes(slim_parser_T* parser, AST_HTML_OPEN_TAG_NODE_T* op
         if (character == '\0' || indented_is_space(character) || character == delimiter) {
           hb_string_T name = source_slice(parser, name_from, name_to);
 
-          if (!is_class_attribute(name)) {
+          if (!merge_separator(parser, name, NULL)) {
             note_attribute_name(parser, attributes, name, name_from, name_to);
             record_spec(parser, attributes, SLIM_SPEC_BOOLEAN, name, name_to, name_to, NULL, false);
           }
@@ -1996,7 +2344,8 @@ static void parse_embedded(slim_parser_T* parser, hb_array_T* output, uint32_t i
       hb_buffer_init(&code, hb_buffer_length(&text.buffer) + 4, parser->allocator);
       hb_buffer_append(&code, " ");
       hb_buffer_append_with_length(&code, hb_buffer_value(&text.buffer), hb_buffer_length(&text.buffer));
-      hb_buffer_append(&code, " ");
+      // The closing `%>` goes on its own line, so that a heredoc terminator on the last line still ends it.
+      hb_buffer_append(&code, "\n");
 
       hb_array_append(
         output,
@@ -2104,15 +2453,269 @@ static uint32_t scan_shortcut_value(const slim_parser_T* parser, uint32_t from) 
   return offset;
 }
 
+// The longest shortcut key at `offset` (Slim sorts the shortcut keys by length), attribute shortcuts only when
+// `attribute_only`.
+static const slim_shortcut_T* match_shortcut(const slim_parser_T* parser, uint32_t offset, bool attribute_only) {
+  const slim_shortcut_T* match = NULL;
+  uint32_t limit = line_limit(parser);
+
+  for (size_t index = 0; index < parser->shortcut_count; index++) {
+    const slim_shortcut_T* shortcut = &parser->shortcuts[index];
+
+    if (attribute_only && shortcut->attribute_count == 0) { continue; }
+    if (shortcut->key.length == 0 || offset + shortcut->key.length > limit) { continue; }
+    if (memcmp(parser->text + offset, shortcut->key.data, shortcut->key.length) != 0) { continue; }
+    if (match && match->key.length >= shortcut->key.length) { continue; }
+
+    match = shortcut;
+  }
+
+  return match;
+}
+
 static bool is_tag_start(const slim_parser_T* parser) {
   char character = peek(parser);
+
+  if (match_shortcut(parser, parser->cursor, false)) { return true; }
 
   if (character == '*') {
     char next = char_at(parser, parser->cursor + 1);
     return next != '\0' && !indented_is_space(next);
   }
 
-  return character == '#' || character == '.' || is_word_character(character);
+  return is_word_character(character);
+}
+
+static void shortcut_config_error(slim_parser_T* parser, const char* description, hb_string_T key, hb_string_T value) {
+  hb_buffer_T found;
+  hb_buffer_init(&found, key.length + value.length + 16, parser->allocator);
+  hb_buffer_append(&found, "`");
+  hb_buffer_append_string(&found, key);
+  hb_buffer_append(&found, "` => `");
+  hb_buffer_append_string(&found, value);
+  hb_buffer_append(&found, "`");
+
+  append_unexpected_error(
+    hb_string_from_c_string(description),
+    hb_string("attribute names and an optional `tag:name`, e.g. `{ \"~\" => \"data-testid\" }`"),
+    hb_string_from_data(hb_buffer_value(&found), hb_buffer_length(&found)),
+    indented_builder_position(&parser->builder, 0),
+    indented_builder_position(&parser->builder, 0),
+    parser->allocator,
+    &parser->errors,
+    parser->options
+  );
+
+  hb_buffer_free(&found);
+}
+
+// Reads `slim_shortcuts`: each value lists attribute names (`attr:` prefix optional), an optional `tag:name` and
+// Slim's `additional_attrs` as `name=value` (values without whitespace).
+static void load_shortcuts(slim_parser_T* parser) {
+  const parser_options_T* options = parser->options;
+  size_t count = options->slim_shortcut_count;
+
+  parser->shortcuts = count > 0 ? hb_allocator_alloc(parser->allocator, sizeof(slim_shortcut_T) * count) : NULL;
+  parser->shortcut_count = 0;
+
+  for (size_t index = 0; index < count; index++) {
+    hb_string_T key = options->slim_shortcuts[index * 2];
+    hb_string_T value = options->slim_shortcuts[index * 2 + 1];
+    slim_shortcut_T shortcut = { .key = key, .tag = HB_STRING_EMPTY, .attribute_count = 0 };
+    bool valid = key.length > 0;
+
+    for (uint32_t offset = 0; offset < value.length && valid;) {
+      while (offset < value.length && (indented_is_space(value.data[offset]) || value.data[offset] == ',')) {
+        offset++;
+      }
+
+      uint32_t token_from = offset;
+
+      while (offset < value.length && !indented_is_space(value.data[offset]) && value.data[offset] != ',') {
+        offset++;
+      }
+
+      hb_string_T token = hb_string_from_data(value.data + token_from, offset - token_from);
+      if (token.length == 0) { continue; }
+
+      const char* equals = memchr(token.data, '=', token.length);
+
+      if (token.length > 4 && strncmp(token.data, "tag:", 4) == 0) {
+        shortcut.tag = hb_string_slice(token, 4);
+      } else if (equals && equals > token.data) {
+        if (shortcut.additional_count < SLIM_SHORTCUT_MAX_ATTRIBUTES) {
+          uint32_t name_length = (uint32_t) (equals - token.data);
+          shortcut.additional[shortcut.additional_count * 2] = hb_string_from_data(token.data, name_length);
+          shortcut.additional[shortcut.additional_count * 2 + 1] = hb_string_slice(token, name_length + 1);
+          shortcut.additional_count++;
+        }
+      } else if (shortcut.attribute_count < SLIM_SHORTCUT_MAX_ATTRIBUTES) {
+        if (token.length > 5 && strncmp(token.data, "attr:", 5) == 0) { token = hb_string_slice(token, 5); }
+        shortcut.attributes[shortcut.attribute_count++] = token;
+      }
+    }
+
+    if (!valid || (shortcut.attribute_count == 0 && shortcut.tag.length == 0)) {
+      shortcut_config_error(parser, "Invalid Slim shortcut: it requires a tag and/or attributes", key, value);
+      continue;
+    }
+
+    bool special = true;
+
+    for (uint32_t offset = 0; offset < key.length; offset++) {
+      if (is_word_character(key.data[offset]) || key.data[offset] == '-') { special = false; }
+    }
+
+    if (shortcut.attribute_count > 0 && !special) {
+      shortcut_config_error(
+        parser,
+        "Invalid Slim shortcut: only special characters can be used for attribute shortcuts",
+        key,
+        value
+      );
+      continue;
+    }
+
+    parser->shortcuts[parser->shortcut_count++] = shortcut;
+  }
+}
+
+static const pm_string_t* static_hash_key(const pm_node_t* key) {
+  if (key->type == PM_SYMBOL_NODE) { return &((const pm_symbol_node_t*) key)->unescaped; }
+  if (key->type == PM_STRING_NODE) { return &((const pm_string_node_t*) key)->unescaped; }
+
+  return NULL;
+}
+
+static bool is_tag_name(const uint8_t* name, size_t length) {
+  if (length == 0) { return false; }
+
+  for (size_t index = 0; index < length; index++) {
+    char character = (char) name[index];
+    if (!is_word_character(character) && character != ':' && character != '-') { return false; }
+  }
+
+  return true;
+}
+
+// A dynamic tag (`*{ tag: "h1", id: x } Title`) whose splat is a Hash literal with static keys and a literal
+// `tag` becomes a regular element: the tag name comes from the literal (Slim's default `div` without a `tag`
+// key) and the other entries stay in the splat (`h1 *{ id: x }`). Returns false for any other splat.
+static bool resolve_dynamic_tag(
+  slim_parser_T* parser,
+  AST_HTML_OPEN_TAG_NODE_T* open_tag,
+  const slim_attribute_spec_T* splat
+) {
+  size_t length = splat->to - splat->from;
+  char* code = malloc(length + 1);
+  if (!code) { return false; }
+
+  memcpy(code, parser->text + splat->from, length);
+  code[length] = '\0';
+
+  pm_parser_t prism;
+  pm_options_t options = { 0, .partial_script = true };
+  pm_parser_init(&prism, (const uint8_t*) code, length, &options);
+  pm_node_t* root = pm_parse(&prism);
+
+  bool resolved = false;
+  hb_buffer_T name;
+  hb_buffer_T rest;
+  hb_buffer_init(&name, 16, parser->allocator);
+  hb_buffer_init(&rest, length + 8, parser->allocator);
+  uint32_t name_from = splat->from > 0 ? splat->from - 1 : 0;
+  uint32_t name_to = name_from;
+
+  const pm_statements_node_t* statements =
+    prism.error_list.size == 0 && root->type == PM_PROGRAM_NODE ? ((pm_program_node_t*) root)->statements : NULL;
+
+  if (statements && statements->body.size == 1 && statements->body.nodes[0]->type == PM_HASH_NODE) {
+    const pm_hash_node_t* hash = (const pm_hash_node_t*) statements->body.nodes[0];
+    resolved = true;
+
+    for (size_t index = 0; index < hash->elements.size && resolved; index++) {
+      const pm_node_t* element = hash->elements.nodes[index];
+      const pm_string_t* key = element->type == PM_ASSOC_NODE ? static_hash_key(((pm_assoc_node_t*) element)->key) : NULL;
+
+      if (!key) {
+        resolved = false;
+        break;
+      }
+
+      if (pm_string_length(key) == 3 && memcmp(pm_string_source(key), "tag", 3) == 0) {
+        const pm_node_t* value = ((pm_assoc_node_t*) element)->value;
+        const pm_string_t* literal = static_hash_key(value);
+
+        if (!literal || !is_tag_name(pm_string_source(literal), pm_string_length(literal))) {
+          resolved = false;
+          break;
+        }
+
+        hb_buffer_clear(&name);
+        hb_buffer_append_with_length(&name, (const char*) pm_string_source(literal), pm_string_length(literal));
+        name_from = splat->from + (uint32_t) (value->location.start - (const uint8_t*) code);
+        name_to = splat->from + (uint32_t) (value->location.end - (const uint8_t*) code);
+        continue;
+      }
+
+      if (hb_buffer_length(&rest) > 0) { hb_buffer_append(&rest, ", "); }
+      hb_buffer_append_with_length(
+        &rest,
+        (const char*) element->location.start,
+        (size_t) (element->location.end - element->location.start)
+      );
+    }
+  }
+
+  pm_node_destroy(&prism, root);
+  pm_parser_free(&prism);
+  pm_options_free(&options);
+  free(code);
+
+  if (resolved) {
+    hb_string_T tag = hb_buffer_length(&name) > 0 ? hb_string_from_data(hb_buffer_value(&name), hb_buffer_length(&name))
+                                                  : hb_string("div");
+
+    token_free(open_tag->tag_name, parser->allocator);
+    open_tag->tag_name = indented_owned_token(&parser->builder, tag, TOKEN_IDENTIFIER, name_from, name_to);
+
+    for (size_t index = 0; index < hb_array_size(open_tag->children); index++) {
+      AST_NODE_T* child = hb_array_get(open_tag->children, index);
+      if (child->type != AST_RUBY_HTML_ATTRIBUTES_SPLAT_NODE) { continue; }
+
+      AST_RUBY_HTML_ATTRIBUTES_SPLAT_NODE_T* node = (AST_RUBY_HTML_ATTRIBUTES_SPLAT_NODE_T*) child;
+
+      if (hb_buffer_length(&rest) == 0) {
+        // Nothing left to splat: drop the node and the whitespace before it.
+        ast_node_free(child, parser->allocator);
+        hb_array_remove(open_tag->children, index);
+
+        if (index > 0) {
+          ast_node_free(hb_array_get(open_tag->children, index - 1), parser->allocator);
+          hb_array_remove(open_tag->children, index - 1);
+        }
+      } else {
+        hb_buffer_T content;
+        hb_buffer_init(&content, hb_buffer_length(&rest) + 32, parser->allocator);
+        hb_buffer_append(&content, "tag.attributes(**{ ");
+        hb_buffer_append_with_length(&content, hb_buffer_value(&rest), hb_buffer_length(&rest));
+        hb_buffer_append(&content, " })");
+
+        if (!hb_string_is_empty(node->content)) { hb_allocator_dealloc(parser->allocator, node->content.data); }
+        node->content =
+          hb_string_copy(hb_string_from_data(hb_buffer_value(&content), hb_buffer_length(&content)), parser->allocator);
+
+        hb_buffer_free(&content);
+      }
+
+      break;
+    }
+  }
+
+  hb_buffer_free(&name);
+  hb_buffer_free(&rest);
+
+  return resolved;
 }
 
 static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent) {
@@ -2123,10 +2726,18 @@ static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent
   // `*attributes Content` is a dynamic tag: the name comes from the splat's `tag` key (Slim::Splat).
   bool dynamic_tag = character == '*';
 
-  if (dynamic_tag) {
+  const slim_shortcut_T* tag_shortcut = match_shortcut(parser, start, false);
+
+  if (tag_shortcut) {
+    // A line starting with a shortcut: its tag (`div` by default). An attribute shortcut is also parsed as one.
+    hb_string_T tag = tag_shortcut->tag.length > 0 ? tag_shortcut->tag : hb_string("div");
+    uint32_t key_to = tag_shortcut->attribute_count == 0 ? start + tag_shortcut->key.length : start;
+
+    tag_name = indented_owned_token(&parser->builder, tag, TOKEN_IDENTIFIER, start, key_to);
+    parser->cursor = key_to;
+    dynamic_tag = false;
+  } else if (dynamic_tag) {
     tag_name = indented_owned_token(&parser->builder, hb_string("*"), TOKEN_IDENTIFIER, start, start);
-  } else if (character == '#' || character == '.') {
-    tag_name = indented_owned_token(&parser->builder, hb_string("div"), TOKEN_IDENTIFIER, start, start);
   } else {
     uint32_t name_to = scan_tag_name(parser, start);
     tag_name = indented_source_token(&parser->builder, start, name_to, TOKEN_IDENTIFIER);
@@ -2137,23 +2748,54 @@ static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent
   slim_attributes_T attributes;
   attributes_init(parser, &attributes);
 
-  while ((character = peek(parser)) == '#' || character == '.') {
+  // Attribute shortcuts: /\A(keys+)((?:\p{Word}|-|\/\d+|:(\w|-)+)*)/, where the run of shortcut characters must be
+  // exactly one shortcut (`.#test` is illegal).
+  while (match_shortcut(parser, parser->cursor, true)) {
     uint32_t shortcut_at = parser->cursor;
-    parser->cursor++;
+    uint32_t key_to = shortcut_at;
+    size_t key_count = 0;
+    const slim_shortcut_T* shortcut = NULL;
+    const slim_shortcut_T* next = NULL;
 
-    uint32_t value_from = parser->cursor;
+    while ((next = match_shortcut(parser, key_to, true))) {
+      key_to += next->key.length;
+      shortcut = next;
+      key_count++;
+    }
+
+    uint32_t value_from = key_to;
     uint32_t value_to = scan_shortcut_value(parser, value_from);
     parser->cursor = value_to;
 
-    add_shortcut_attribute(
-      parser,
-      open_tag,
-      &attributes,
-      character == '#' ? "id" : "class",
-      shortcut_at,
-      value_from,
-      value_to
-    );
+    if (key_count != 1) {
+      syntax_error(parser, "Illegal shortcut", "a single shortcut before the name", shortcut_at, key_to);
+      continue;
+    }
+
+    for (size_t index = 0; index < shortcut->attribute_count; index++) {
+      add_shortcut_attribute(
+        parser,
+        open_tag,
+        &attributes,
+        shortcut->attributes[index],
+        shortcut_at,
+        key_to,
+        value_from,
+        value_to
+      );
+    }
+
+    for (size_t index = 0; index < shortcut->additional_count; index++) {
+      add_additional_attribute(
+        parser,
+        open_tag,
+        &attributes,
+        shortcut->additional[index * 2],
+        shortcut->additional[index * 2 + 1],
+        shortcut_at,
+        key_to
+      );
+    }
   }
 
   bool leading_whitespace = false;
@@ -2168,6 +2810,37 @@ static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent
   parse_attributes(parser, open_tag, &attributes);
 
   hb_buffer_T dynamic_entries;
+  // Source-faithful dynamic tag that can't be resolved statically: `content_tag(splat[:tag] || :div, ...) do`.
+  bool helper_tag = false;
+  uint32_t helper_from = 0;
+  uint32_t helper_to = 0;
+
+  if (dynamic_tag && !parser->exact) {
+    slim_attribute_spec_T* splat = hb_array_size(attributes.specs) > 0 ? hb_array_get(attributes.specs, 0) : NULL;
+    bool only_splat = splat && hb_array_size(attributes.specs) == 1 && hb_array_size(attributes.class_parts) == 0;
+
+    if (splat && splat->kind == SLIM_SPEC_SPLAT && resolve_dynamic_tag(parser, open_tag, splat)) {
+      tag_name = open_tag->tag_name;
+    } else if (only_splat && splat->kind == SLIM_SPEC_SPLAT && splat->to > splat->from) {
+      helper_tag = true;
+      helper_from = splat->from;
+      helper_to = splat->to;
+    } else {
+      syntax_error(
+        parser,
+        "Unsupported dynamic tag",
+        "a Hash literal with a literal `tag`, or a single attribute splat (or use `exact_semantics`)",
+        start,
+        line_limit(parser)
+      );
+
+      token_free(open_tag->tag_name, parser->allocator);
+      open_tag->tag_name = indented_owned_token(&parser->builder, hb_string("div"), TOKEN_IDENTIFIER, start, start);
+      tag_name = open_tag->tag_name;
+    }
+
+    dynamic_tag = false;
+  }
 
   if (dynamic_tag) {
     hb_buffer_init(&dynamic_entries, 128, parser->allocator);
@@ -2175,7 +2848,7 @@ static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent
     free_open_tag_children(parser, open_tag);
     free_class_parts(parser, &attributes);
     parser->uses_splat_helper = true;
-  } else {
+  } else if (!helper_tag) {
     finish_attributes(parser, open_tag, &attributes);
   }
 
@@ -2252,6 +2925,39 @@ static void parse_tag(slim_parser_T* parser, hb_array_T* output, uint32_t indent
   }
 
   if (leading_whitespace) { append_space(parser, output, start); }
+
+  if (helper_tag) {
+    hb_string_T splat = source_slice(parser, helper_from, helper_to);
+    hb_buffer_T code;
+    hb_buffer_init(&code, splat.length * 2 + 64, parser->allocator);
+
+    hb_buffer_append(&code, self_closing ? " tag(" : " content_tag(");
+    hb_buffer_append_string(&code, splat);
+    hb_buffer_append(&code, "[:tag] || :div, ");
+    hb_buffer_append_string(&code, splat);
+    hb_buffer_append(&code, self_closing ? ".except(:tag)) " : ".except(:tag)) do ");
+
+    hb_array_append(
+      output,
+      indented_erb_node(&parser->builder, "<%=", start, helper_from, helper_to, NULL, hb_buffer_value(&code))
+    );
+
+    if (!self_closing) {
+      for (size_t index = 0; index < hb_array_size(body); index++) {
+        hb_array_append(output, hb_array_get(body, index));
+      }
+
+      hb_array_append(output, indented_synthetic_erb_node(&parser->builder, "<%", " end ", parser->last_end));
+    }
+
+    hb_array_free(&body);
+    hb_buffer_free(&code);
+    ast_node_free((AST_NODE_T*) open_tag, parser->allocator);
+
+    if (trailing_whitespace) { append_space(parser, output, parser->last_end); }
+
+    return;
+  }
 
   if (dynamic_tag) {
     char variable[32];
@@ -2527,6 +3233,20 @@ static void parse_slim_comment(slim_parser_T* parser, hb_array_T* output, uint32
     finish_line(parser);
   }
 
+  // `/# locals: (...)` is the strict locals magic comment Rails reads from Slim templates (ActionView's
+  // STRICT_LOCALS_REGEX needs the `#`): its content starts after the `#`, like `<%# locals: (...) %>`.
+  if (content_to > content_from + 1 && parser->text[content_from] == '#') {
+    uint32_t after = content_from + 1;
+
+    while (after < content_to && indented_is_space(parser->text[after])) {
+      after++;
+    }
+
+    if (after > content_from + 1 && content_to - after >= 7 && strncmp(parser->text + after, "locals:", 7) == 0) {
+      content_from++;
+    }
+  }
+
   hb_string_T content = source_slice(parser, content_from, content_to);
 
   for (uint32_t index = 0; index + 1 < content.length; index++) {
@@ -2541,23 +3261,21 @@ typedef struct {
   const char* value;
 } slim_doctype_T;
 
-// Temple::HTML::Fast::DOCTYPES for Slim's default :xhtml format.
+// Temple::HTML::Fast::DOCTYPES for the :html format (the one Rails uses for Slim templates), plus the
+// doctypes only the :xhtml format knows.
 static const slim_doctype_T doctypes[] = {
   { "html", " html" },
   { "5", " html" },
+  { "strict", " html PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\"" },
+  { "frameset", " html PUBLIC \"-//W3C//DTD HTML 4.01 Frameset//EN\" \"http://www.w3.org/TR/html4/frameset.dtd\"" },
+  { "transitional",
+    " html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\"" },
   { "1.1", " html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\"" },
-  { "strict",
-    " html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\"" },
-  { "frameset",
-    " html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"" },
   { "mobile",
     " html PUBLIC \"-//WAPFORUM//DTD XHTML Mobile 1.2//EN\" "
     "\"http://www.openmobilealliance.org/tech/DTD/xhtml-mobile12.dtd\"" },
   { "basic",
     " html PUBLIC \"-//W3C//DTD XHTML Basic 1.1//EN\" \"http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd\"" },
-  { "transitional",
-    " html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" "
-    "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"" },
   { "svg", " svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\"" },
 };
 
@@ -2583,7 +3301,11 @@ static void parse_doctype(slim_parser_T* parser, hb_array_T* output, uint32_t in
     hb_buffer_append(&buffer, " version=\"1.0\" encoding=\"");
 
     if (encoding.length > 0) {
-      hb_buffer_append_string(&buffer, encoding);
+      // Temple downcases the whole doctype line, encoding included.
+      for (uint32_t offset = 0; offset < encoding.length; offset++) {
+        char character = encoding.data[offset];
+        hb_buffer_append_char(&buffer, (character >= 'A' && character <= 'Z') ? (char) (character + 32) : character);
+      }
     } else {
       hb_buffer_append(&buffer, "utf-8");
     }
@@ -2804,6 +3526,7 @@ AST_DOCUMENT_NODE_T* herb_slim_parse(const char* source, const parser_options_T*
   slim_parser_T parser = { 0 };
 
   parser.options = &parser_options;
+  parser.exact = parser_options.exact_semantics;
   parser.allocator = allocator;
   parser.errors = NULL;
 
@@ -2811,14 +3534,30 @@ AST_DOCUMENT_NODE_T* herb_slim_parse(const char* source, const parser_options_T*
   indented_builder_init(&parser.builder, &parser.source, &parser_options, hb_string("Slim"), allocator);
 
   parser.text = parser.source.source;
+  load_shortcuts(&parser);
   parser.cursor = parser.source.line_count > 0 ? parser.source.lines[0].content_start : 0;
 
   hb_array_T* children = hb_array_init(8, allocator);
   parse_block(&parser, -1, children);
 
-  if (parser.uses_splat_helper) {
+  if (parser.uses_splat_helper && parser.exact) {
     hb_array_T* with_helper = hb_array_init(hb_array_size(children) + 1, allocator);
-    hb_array_append(with_helper, indented_synthetic_erb_node(&parser.builder, "<%", SLIM_SPLAT_HELPER, 0));
+    hb_buffer_T helper;
+    hb_buffer_init(&helper, strlen(SLIM_SPLAT_HELPER) + 64, allocator);
+    hb_buffer_append(&helper, " _slim_merge_attrs = {");
+
+    for (size_t index = 0; index < parser_options.slim_merge_attr_count; index++) {
+      hb_buffer_append(&helper, index > 0 ? ", " : " ");
+      append_ruby_string_literal(&helper, parser_options.slim_merge_attrs[index * 2]);
+      hb_buffer_append(&helper, " => ");
+      append_ruby_string_literal(&helper, parser_options.slim_merge_attrs[index * 2 + 1]);
+    }
+
+    hb_buffer_append(&helper, parser_options.slim_merge_attr_count > 0 ? " }\n" : "}\n");
+    hb_buffer_append(&helper, SLIM_SPLAT_HELPER);
+
+    hb_array_append(with_helper, indented_synthetic_erb_node(&parser.builder, "<%", hb_buffer_value(&helper), 0));
+    hb_buffer_free(&helper);
 
     for (size_t index = 0; index < hb_array_size(children); index++) {
       hb_array_append(with_helper, hb_array_get(children, index));
@@ -2846,6 +3585,7 @@ AST_DOCUMENT_NODE_T* herb_slim_parse(const char* source, const parser_options_T*
 
   indented_builder_free(&parser.builder);
   indented_source_free(&parser.source);
+  if (parser.shortcuts) { hb_allocator_dealloc(allocator, parser.shortcuts); }
 
   *parser_options.error_count = 0;
   herb_visit_node((AST_NODE_T*) document, count_node_errors, parser_options.error_count);
