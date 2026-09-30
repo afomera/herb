@@ -94,7 +94,7 @@ export class RuntimeOverlayProvider {
   private async refresh(editor: TextEditor) {
     const display = this.display()
 
-    if (display === "off" || !this.erb(editor)) {
+    if (display === "off" || !this.templateLanguage(editor)) {
       this.clear(editor)
 
       return
@@ -127,19 +127,40 @@ export class RuntimeOverlayProvider {
     return display === "replace" ? this.replaced : this.reported
   }
 
-  // Runtime values are captured by Herb's ERB engine, so only ERB templates have any to show.
-  // Slim templates are rendered by the Slim gem, which Herb doesn't instrument.
-  private erb(editor: TextEditor): boolean {
-    return editor.document.languageId === "erb" || editor.document.fileName.endsWith(".erb")
+  // Runtime values are captured by Herb::Engine, which compiles ERB and, through
+  // Herb::ActionView::SlimHandler, Slim. A Slim template rendered by the Slim gem records nothing,
+  // so it simply has no overlays.
+  private templateLanguage(editor: TextEditor): "erb" | "slim" | null {
+    const { languageId, fileName } = editor.document
+
+    if (languageId === "slim" || fileName.endsWith(".slim")) return "slim"
+    if (languageId === "erb" || fileName.endsWith(".erb")) return "erb"
+
+    return null
+  }
+
+  // Slim's `#{}` interpolation is recorded up to its code, so the closing brace (two for `#{{}}`)
+  // is taken into the range to replace the whole interpolation.
+  private interpolationRange(editor: TextEditor, range: Range): Range {
+    if (this.templateLanguage(editor) !== "slim") return range
+
+    const text = editor.document.getText(range)
+
+    if (!text.startsWith("#{")) return range
+
+    const braces = text.startsWith("#{{") ? "}}" : "}"
+    const end = range.end.translate(0, braces.length)
+
+    return editor.document.getText(new Range(range.end, end)) === braces ? new Range(range.start, end) : range
   }
 
   private decoration(editor: TextEditor, overlay: RuntimeOverlay, display: RuntimeOverlayDisplay): DecorationOptions[] {
-    const range = new Range(
+    const range = this.interpolationRange(editor, new Range(
       overlay.range.start.line,
       overlay.range.start.character,
       overlay.range.end.line,
       overlay.range.end.character,
-    )
+    ))
 
     if (display === "replace" && editor.selections.some(selection => this.sharesLine(selection, range))) {
       return []
@@ -169,7 +190,7 @@ export class RuntimeOverlayProvider {
     const hover = new MarkdownString()
 
     hover.appendMarkdown("**Source**\n")
-    hover.appendCodeblock(editor.document.getText(range), "erb")
+    hover.appendCodeblock(editor.document.getText(range), this.templateLanguage(editor) ?? "erb")
 
     if (new Set(overlay.recent.map(entry => entry.value)).size > 1) {
       hover.appendMarkdown(`\n**Last ${overlay.recent.length} renders**\n`)

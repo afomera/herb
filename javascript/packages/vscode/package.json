@@ -180,7 +180,7 @@
             "Show nothing."
           ],
           "default": "replace",
-          "description": "How to show what an ERB tag rendered, for tags the application asked Herb to capture."
+          "description": "How to show what an ERB tag or Slim output rendered, for tags the application asked Herb to capture."
         }
       }
     },
