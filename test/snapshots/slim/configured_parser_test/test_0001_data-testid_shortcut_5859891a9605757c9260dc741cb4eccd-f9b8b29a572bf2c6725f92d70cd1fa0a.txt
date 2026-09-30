@@ -1,0 +1,76 @@
+---
+source: "Slim::ConfiguredParserTest#test_0001_data-testid shortcut"
+input: "div.some-class~this-element-test-id Hello"
+options: {language: "slim", slim_shortcuts: {"~" => "data-testid", "#" => "id", "." => "class"}, slim_merge_attrs: {"class" => " ", "data-controller" => " "}}
+---
+@ DocumentNode (location: (1:0)-(1:41))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(1:41))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:35))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "div" (location: (1:0)-(1:3))
+        │       ├── tag_closing: ">" (location: (1:35)-(1:35))
+        │       ├── children: (4 items)
+        │       │   ├── @ WhitespaceNode (location: (1:3)-(1:3))
+        │       │   │   └── value: " " (location: (1:3)-(1:3))
+        │       │   │
+        │       │   ├── @ HTMLAttributeNode (location: (1:3)-(1:14))
+        │       │   │   ├── name:
+        │       │   │   │   └── @ HTMLAttributeNameNode (location: (1:3)-(1:4))
+        │       │   │   │       └── children: (1 item)
+        │       │   │   │           └── @ LiteralNode (location: (1:3)-(1:4))
+        │       │   │   │               └── content: "class"
+        │       │   │   │
+        │       │   │   │
+        │       │   │   ├── equals: "=" (location: (1:4)-(1:4))
+        │       │   │   └── value:
+        │       │   │       └── @ HTMLAttributeValueNode (location: (1:4)-(1:14))
+        │       │   │           ├── open_quote: """ (location: (1:4)-(1:4))
+        │       │   │           ├── children: (1 item)
+        │       │   │           │   └── @ LiteralNode (location: (1:4)-(1:14))
+        │       │   │           │       └── content: "some-class"
+        │       │   │           │
+        │       │   │           ├── close_quote: """ (location: (1:14)-(1:14))
+        │       │   │           └── quoted: true
+        │       │   │
+        │       │   │
+        │       │   ├── @ WhitespaceNode (location: (1:14)-(1:14))
+        │       │   │   └── value: " " (location: (1:14)-(1:14))
+        │       │   │
+        │       │   └── @ HTMLAttributeNode (location: (1:14)-(1:35))
+        │       │       ├── name:
+        │       │       │   └── @ HTMLAttributeNameNode (location: (1:14)-(1:15))
+        │       │       │       └── children: (1 item)
+        │       │       │           └── @ LiteralNode (location: (1:14)-(1:15))
+        │       │       │               └── content: "data-testid"
+        │       │       │
+        │       │       │
+        │       │       ├── equals: "=" (location: (1:15)-(1:15))
+        │       │       └── value:
+        │       │           └── @ HTMLAttributeValueNode (location: (1:15)-(1:35))
+        │       │               ├── open_quote: """ (location: (1:15)-(1:15))
+        │       │               ├── children: (1 item)
+        │       │               │   └── @ LiteralNode (location: (1:15)-(1:35))
+        │       │               │       └── content: "this-element-test-id"
+        │       │               │
+        │       │               ├── close_quote: """ (location: (1:35)-(1:35))
+        │       │               └── quoted: true
+        │       │
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "div" (location: (1:0)-(1:3))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (1:36)-(1:41))
+        │       └── content: "Hello"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (1:41)-(1:41))
+        │       ├── tag_opening: "</" (location: (1:41)-(1:41))
+        │       ├── tag_name: "div" (location: (1:41)-(1:41))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (1:41)-(1:41))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

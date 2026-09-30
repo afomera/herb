@@ -1,0 +1,92 @@
+---
+source: "Slim::ExactSemanticsTest#test_0005_data hash attribute"
+input: "div data={ id: 1 } Content"
+options: {language: "slim", exact_semantics: true}
+---
+@ DocumentNode (location: (1:0)-(1:26))
+└── children: (2 items)
+    ├── @ ERBContentNode (location: (1:0)-(1:0))
+    │   ├── tag_opening: "<%" (location: (1:0)-(1:0))
+    │   ├── content: " _slim_merge_attrs = { "class" => " " }
+    │   _slim_escape = lambda do |value|
+    │     if value.respond_to?(:html_safe?) && value.html_safe?
+    │       value.to_s
+    │     else
+    │       value.to_s.gsub(/[&<>"']/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;", "'" => "&#39;")
+    │     end
+    │   end
+    │   _slim_splat = lambda do |entries, dynamic_tag = false|
+    │     attributes = {}
+    │     add = lambda do |name, value|
+    │       if !attributes.key?(name)
+    │         attributes[name] = value
+    │       elsif (separator = _slim_merge_attrs[name])
+    │         attributes[name] = "#{attributes[name]}#{separator}#{value}"
+    │       else
+    │         raise ArgumentError, "Multiple #{name} attributes specified"
+    │       end
+    │     end
+    │     escape = ->(value, escaped) { escaped && value != true ? _slim_escape.(value) : value }
+    │     hyphen = lambda do |name, value, escaped|
+    │       if value.is_a?(Hash)
+    │         value.each { |key, nested| hyphen.("#{name}-#{key}", nested, escaped) }
+    │       else
+    │         add.(name, escape.(value, escaped))
+    │       end
+    │     end
+    │     code = lambda do |name, value, escaped|
+    │       if (separator = _slim_merge_attrs[name])
+    │         value = value.is_a?(Array) ? value.join(separator) : value.to_s
+    │         add.(name, escape.(value, escaped)) unless value.empty?
+    │       elsif (name == "data" || name == "aria") && value.is_a?(Hash)
+    │         hyphen.(name, value, escaped)
+    │       elsif value != false && !value.nil?
+    │         add.(name, escape.(value, escaped))
+    │       end
+    │     end
+    │     entries.each do |kind, *arguments|
+    │       case kind
+    │       when :attr then add.(*arguments)
+    │       when :code then code.(*arguments)
+    │       else arguments.first.each { |name, value| code.(name.to_s, value, true) }
+    │       end
+    │     end
+    │     tag = dynamic_tag && attributes.delete("tag").to_s
+    │     html = attributes.sort_by(&:first).map { |name, value| value == true ? " #{name}" : " #{name}=\"#{value}\"" }.join
+    │     dynamic_tag ? [tag.empty? ? "div" : tag, html] : html
+    │   end
+    │   " (location: (1:0)-(1:0))
+    │   ├── tag_closing: "%>" (location: (1:0)-(1:0))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    └── @ HTMLElementNode (location: (1:0)-(1:26))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:18))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "div" (location: (1:0)-(1:3))
+        │       ├── tag_closing: ">" (location: (1:18)-(1:18))
+        │       ├── children: (1 item)
+        │       │   └── @ ERBContentNode (location: (1:3)-(1:3))
+        │       │       ├── tag_opening: "<%==" (location: (1:3)-(1:3))
+        │       │       ├── content: " _slim_splat.([[:code, "data", ({ id: 1 }), true]]) " (location: (1:3)-(1:3))
+        │       │       ├── tag_closing: "%>" (location: (1:3)-(1:3))
+        │       │       ├── parsed: true
+        │       │       └── valid: true
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "div" (location: (1:0)-(1:3))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (1:19)-(1:26))
+        │       └── content: "Content"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (1:26)-(1:26))
+        │       ├── tag_opening: "</" (location: (1:26)-(1:26))
+        │       ├── tag_name: "div" (location: (1:26)-(1:26))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (1:26)-(1:26))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

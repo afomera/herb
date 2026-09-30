@@ -1,7 +1,7 @@
 ---
-source: "Slim::ParserTest#test_0036_literal ERB opener in text"
+source: "Slim::ExactSemanticsTest#test_0006_literal ERB opener in text"
 input: "p a <% b"
-options: {language: "slim"}
+options: {language: "slim", exact_semantics: true}
 ---
 @ DocumentNode (location: (1:0)-(1:8))
 └── children: (1 item)
@@ -15,9 +15,19 @@ options: {language: "slim"}
         │       └── is_void: false
         │
         ├── tag_name: "p" (location: (1:0)-(1:1))
-        ├── body: (1 item)
-        │   └── @ HTMLTextNode (location: (1:2)-(1:8))
-        │       └── content: "a <% b"
+        ├── body: (3 items)
+        │   ├── @ HTMLTextNode (location: (1:2)-(1:8))
+        │   │   └── content: "a "
+        │   │
+        │   ├── @ ERBContentNode (location: (1:8)-(1:8))
+        │   │   ├── tag_opening: "<%==" (location: (1:8)-(1:8))
+        │   │   ├── content: " "<" + "%" " (location: (1:8)-(1:8))
+        │   │   ├── tag_closing: "%>" (location: (1:8)-(1:8))
+        │   │   ├── parsed: true
+        │   │   └── valid: true
+        │   │
+        │   └── @ HTMLTextNode (location: (1:8)-(1:8))
+        │       └── content: " b"
         │
         ├── close_tag:
         │   └── @ HTMLCloseTagNode (location: (1:8)-(1:8))

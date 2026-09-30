@@ -1,0 +1,57 @@
+---
+source: "Slim::ParserTest#test_0048_strict locals magic comment"
+input: |2-
+/# locals: (title:, count: 0)
+p = title
+options: {language: "slim", strict_locals: true}
+---
+@ DocumentNode (location: (1:0)-(2:9))
+└── children: (2 items)
+    ├── @ ERBStrictLocalsNode (location: (1:0)-(1:29))
+    │   ├── tag_opening: "<%#" (location: (1:0)-(1:0))
+    │   ├── content: " locals: (title:, count: 0)" (location: (1:2)-(1:29))
+    │   ├── tag_closing: "%>" (location: (1:29)-(1:29))
+    │   └── locals: (2 items)
+    │       ├── @ RubyParameterNode (location: (1:12)-(1:18))
+    │       │   ├── name: "title" (location: (1:12)-(1:18))
+    │       │   ├── default_value: ∅
+    │       │   ├── kind: "keyword"
+    │       │   └── required: true
+    │       │
+    │       └── @ RubyParameterNode (location: (1:20)-(1:28))
+    │           ├── name: "count" (location: (1:20)-(1:26))
+    │           ├── default_value:
+    │           │   └── @ RubyLiteralNode (location: (1:27)-(1:28))
+    │           │       └── content: "0"
+    │           │
+    │           ├── kind: "keyword"
+    │           └── required: false
+    │
+    │
+    └── @ HTMLElementNode (location: (2:0)-(2:9))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (2:0)-(2:1))
+        │       ├── tag_opening: "<" (location: (2:0)-(2:0))
+        │       ├── tag_name: "p" (location: (2:0)-(2:1))
+        │       ├── tag_closing: ">" (location: (2:1)-(2:1))
+        │       ├── children: []
+        │       └── is_void: false
+        │
+        ├── tag_name: "p" (location: (2:0)-(2:1))
+        ├── body: (1 item)
+        │   └── @ ERBContentNode (location: (2:2)-(2:9))
+        │       ├── tag_opening: "<%=" (location: (2:2)-(2:2))
+        │       ├── content: "title" (location: (2:4)-(2:9))
+        │       ├── tag_closing: "%>" (location: (2:9)-(2:9))
+        │       ├── parsed: true
+        │       └── valid: true
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (2:9)-(2:9))
+        │       ├── tag_opening: "</" (location: (2:9)-(2:9))
+        │       ├── tag_name: "p" (location: (2:9)-(2:9))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (2:9)-(2:9))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

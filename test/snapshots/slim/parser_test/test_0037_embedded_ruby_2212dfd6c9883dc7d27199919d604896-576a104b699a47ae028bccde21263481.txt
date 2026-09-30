@@ -10,7 +10,8 @@ options: {language: "slim"}
 └── children: (2 items)
     ├── @ ERBContentNode (location: (1:0)-(2:7))
     │   ├── tag_opening: "<%" (location: (1:0)-(1:0))
-    │   ├── content: " x = 1 " (location: (2:2)-(2:7))
+    │   ├── content: " x = 1
+    │   " (location: (2:2)-(2:7))
     │   ├── tag_closing: "%>" (location: (2:7)-(2:7))
     │   ├── parsed: true
     │   └── valid: true

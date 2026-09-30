@@ -4,8 +4,8 @@ require_relative "slim_test_helper"
 
 module Slim
   # Round-trip oracle: every template is rendered by the slim gem, and the HTML+ERB printed from
-  # Herb's tree (`Herb.parse(source, language: "slim")`) is rendered by ActionView. Both outputs
-  # must be the same HTML (attribute order and entity encoding are normalized).
+  # Herb's tree (`Herb.parse(source, language: "slim", exact_semantics: true)`) is rendered by ActionView.
+  # Both outputs must be the same HTML (attribute order and entity encoding are normalized).
   class RenderTest < Minitest::Spec
     include SlimTestSupport::TestHelper
 
@@ -302,6 +302,29 @@ module Slim
         /[if IE]
           p Old browser
       SLIM
+
+      "one-line case when" => <<~SLIM,
+        p
+          - case count when 1
+            | one
+          - when 3
+            | three
+          |  is the count
+      SLIM
+
+      "heredoc in embedded ruby" => <<~SLIM,
+        ruby:
+          message = <<~MSG
+            heredoc
+          MSG
+        p = message
+      SLIM
+
+      "legacy doctypes" => <<~SLIM,
+        doctype strict
+        doctype transitional
+        doctype frameset
+      SLIM
     }.freeze
 
     test "byte order mark is ignored" do
@@ -311,7 +334,7 @@ module Slim
     test "omitted attributes leave no stray whitespace" do
       skip SlimTestSupport.render_dependency_error if SlimTestSupport.render_dependency_error
 
-      erb = slim_to_erb("option selected=guest value=nothing class=nothing Opt")
+      erb = slim_to_erb("option selected=guest value=nothing class=nothing Opt", exact_semantics: true)
 
       assert_equal "<option>Opt</option>", render_erb(erb, LOCALS)
       assert_equal "<option>Opt</option>", render_slim("option selected=guest value=nothing class=nothing Opt", LOCALS)
@@ -321,6 +344,57 @@ module Slim
       test description do
         assert_slim_renders_like_erb(source, LOCALS)
       end
+    end
+  end
+
+  # `slim_shortcuts` / `slim_merge_attrs` configured like an app's `Slim::Engine.set_options(shortcut:, merge_attrs:)`.
+  class ConfiguredRenderTest < Minitest::Spec
+    include SlimTestSupport::TestHelper
+
+    SLIM_OPTIONS = {
+      shortcut: { "~" => { attr: "data-testid" }, "#" => { attr: "id" }, "." => { attr: "class" } },
+      merge_attrs: { "class" => " ", "data-controller" => " " },
+    }.freeze
+
+    HERB_OPTIONS = {
+      slim_shortcuts: { "~" => "data-testid", "#" => "id", "." => "class" },
+      slim_merge_attrs: { "class" => " ", "data-controller" => " " },
+    }.freeze
+
+    LOCALS = { name: "Ada", controllers: ["tabs", nil, "modal"], nothing: nil }.freeze
+
+    CORPUS = {
+      "data-testid shortcut" => <<~SLIM,
+        div.some-class~this-element-test-id Hello
+        ~only-a-test-id
+        span~a.b#c Mixed
+      SLIM
+
+      "stacked data-controller values are merged" => <<~'SLIM',
+        div data-controller="a" data-controller="b #{name}" Static and interpolated
+        div data-controller="a" data-controller=controllers Array
+        div data-controller=nothing data-controller=nothing Empty
+      SLIM
+
+      "class and data-controller merging together" => <<~SLIM,
+        .card~card data-controller="x" class="wide" data-controller="y" Both
+      SLIM
+    }.freeze
+
+    CORPUS.each do |description, source|
+      test description do
+        assert_slim_renders_like_erb(source, LOCALS, slim_options: SLIM_OPTIONS, **HERB_OPTIONS)
+      end
+    end
+
+    test "tag shortcuts and additional attributes" do
+      assert_slim_renders_like_erb(
+        "@main Section\n^data JSON\n",
+        LOCALS,
+        slim_options: { shortcut: { "@" => { tag: "section", attr: "role" },
+                                    "^" => { tag: "script", attr: "data-binding", additional_attrs: { type: "application/json" } } } },
+        slim_shortcuts: { "@" => "tag:section role", "^" => "tag:script data-binding type=application/json" }
+      )
     end
   end
 end

@@ -1,5 +1,5 @@
 ---
-source: "Slim::ParserErrorsTest#test_0008_explicit end"
+source: "Slim::ParserErrorsTest#test_0010_explicit end"
 input: |2-
 - if a
   p A

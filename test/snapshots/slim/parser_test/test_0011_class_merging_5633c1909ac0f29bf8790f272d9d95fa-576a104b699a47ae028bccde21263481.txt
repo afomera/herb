@@ -17,9 +17,9 @@ options: {language: "slim"}
         │       │   │
         │       │   └── @ HTMLAttributeNode (location: (1:0)-(1:20))
         │       │       ├── name:
-        │       │       │   └── @ HTMLAttributeNameNode (location: (1:0)-(1:0))
+        │       │       │   └── @ HTMLAttributeNameNode (location: (1:0)-(1:1))
         │       │       │       └── children: (1 item)
-        │       │       │           └── @ LiteralNode (location: (1:0)-(1:0))
+        │       │       │           └── @ LiteralNode (location: (1:0)-(1:1))
         │       │       │               └── content: "class"
         │       │       │
         │       │       │
@@ -27,10 +27,22 @@ options: {language: "slim"}
         │       │       └── value:
         │       │           └── @ HTMLAttributeValueNode (location: (1:1)-(1:20))
         │       │               ├── open_quote: """ (location: (1:1)-(1:1))
-        │       │               ├── children: (1 item)
-        │       │               │   └── @ ERBContentNode (location: (1:1)-(1:20))
-        │       │               │       ├── tag_opening: "<%=" (location: (1:1)-(1:1))
-        │       │               │       ├── content: " ["a", "b", [c]].flatten.map(&:to_s).reject(&:empty?).join(" ") " (location: (1:1)-(1:20))
+        │       │               ├── children: (5 items)
+        │       │               │   ├── @ LiteralNode (location: (1:1)-(1:2))
+        │       │               │   │   └── content: "a"
+        │       │               │   │
+        │       │               │   ├── @ LiteralNode (location: (1:10)-(1:10))
+        │       │               │   │   └── content: " "
+        │       │               │   │
+        │       │               │   ├── @ LiteralNode (location: (1:10)-(1:11))
+        │       │               │   │   └── content: "b"
+        │       │               │   │
+        │       │               │   ├── @ LiteralNode (location: (1:19)-(1:19))
+        │       │               │   │   └── content: " "
+        │       │               │   │
+        │       │               │   └── @ ERBContentNode (location: (1:19)-(1:20))
+        │       │               │       ├── tag_opening: "<%=" (location: (1:19)-(1:19))
+        │       │               │       ├── content: "c" (location: (1:19)-(1:20))
         │       │               │       ├── tag_closing: "%>" (location: (1:20)-(1:20))
         │       │               │       ├── parsed: true
         │       │               │       └── valid: true

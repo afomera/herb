@@ -1,9 +1,9 @@
 ---
-source: "Slim::ParserTest#test_0033_dynamic class values"
+source: "Slim::ExactSemanticsTest#test_0002_dynamic class values"
 input: |2-
 .a class=extra
 span class=classes
-options: {language: "slim"}
+options: {language: "slim", exact_semantics: true}
 ---
 @ DocumentNode (location: (1:0)-(2:18))
 └── children: (2 items)
@@ -29,16 +29,10 @@ options: {language: "slim"}
     │   │       │       └── value:
     │   │       │           └── @ HTMLAttributeValueNode (location: (1:1)-(1:14))
     │   │       │               ├── open_quote: """ (location: (1:1)-(1:1))
-    │   │       │               ├── children: (3 items)
-    │   │       │               │   ├── @ LiteralNode (location: (1:1)-(1:2))
-    │   │       │               │   │   └── content: "a"
-    │   │       │               │   │
-    │   │       │               │   ├── @ LiteralNode (location: (1:9)-(1:9))
-    │   │       │               │   │   └── content: " "
-    │   │       │               │   │
-    │   │       │               │   └── @ ERBContentNode (location: (1:9)-(1:14))
-    │   │       │               │       ├── tag_opening: "<%=" (location: (1:9)-(1:9))
-    │   │       │               │       ├── content: "extra" (location: (1:9)-(1:14))
+    │   │       │               ├── children: (1 item)
+    │   │       │               │   └── @ ERBContentNode (location: (1:1)-(1:14))
+    │   │       │               │       ├── tag_opening: "<%=" (location: (1:1)-(1:1))
+    │   │       │               │       ├── content: " ["a", [extra]].flatten.map(&:to_s).reject(&:empty?).join(" ") " (location: (1:1)-(1:14))
     │   │       │               │       ├── tag_closing: "%>" (location: (1:14)-(1:14))
     │   │       │               │       ├── parsed: true
     │   │       │               │       └── valid: true
@@ -67,32 +61,46 @@ options: {language: "slim"}
         │       ├── tag_opening: "<" (location: (2:0)-(2:0))
         │       ├── tag_name: "span" (location: (2:0)-(2:4))
         │       ├── tag_closing: ">" (location: (2:18)-(2:18))
-        │       ├── children: (2 items)
-        │       │   ├── @ WhitespaceNode (location: (2:5)-(2:5))
-        │       │   │   └── value: " " (location: (2:5)-(2:5))
-        │       │   │
-        │       │   └── @ HTMLAttributeNode (location: (2:5)-(2:18))
-        │       │       ├── name:
-        │       │       │   └── @ HTMLAttributeNameNode (location: (2:5)-(2:10))
-        │       │       │       └── children: (1 item)
-        │       │       │           └── @ LiteralNode (location: (2:5)-(2:10))
-        │       │       │               └── content: "class"
+        │       ├── children: (1 item)
+        │       │   └── @ ERBUnlessNode (location: (2:11)-(2:18))
+        │       │       ├── tag_opening: "<%" (location: (2:11)-(2:11))
+        │       │       ├── content: " unless (_slim_class = [[classes]].flatten.map(&:to_s).reject(&:empty?).join(" ")).empty? " (location: (2:11)-(2:18))
+        │       │       ├── tag_closing: "%>" (location: (2:18)-(2:18))
+        │       │       ├── then_keyword: ∅
+        │       │       ├── statements: (2 items)
+        │       │       │   ├── @ WhitespaceNode (location: (2:5)-(2:5))
+        │       │       │   │   └── value: " " (location: (2:5)-(2:5))
+        │       │       │   │
+        │       │       │   └── @ HTMLAttributeNode (location: (2:5)-(2:18))
+        │       │       │       ├── name:
+        │       │       │       │   └── @ HTMLAttributeNameNode (location: (2:5)-(2:10))
+        │       │       │       │       └── children: (1 item)
+        │       │       │       │           └── @ LiteralNode (location: (2:5)-(2:10))
+        │       │       │       │               └── content: "class"
+        │       │       │       │
+        │       │       │       │
+        │       │       │       ├── equals: "=" (location: (2:18)-(2:18))
+        │       │       │       └── value:
+        │       │       │           └── @ HTMLAttributeValueNode (location: (2:18)-(2:18))
+        │       │       │               ├── open_quote: """ (location: (2:18)-(2:18))
+        │       │       │               ├── children: (1 item)
+        │       │       │               │   └── @ ERBContentNode (location: (2:18)-(2:18))
+        │       │       │               │       ├── tag_opening: "<%=" (location: (2:18)-(2:18))
+        │       │       │               │       ├── content: " _slim_class " (location: (2:18)-(2:18))
+        │       │       │               │       ├── tag_closing: "%>" (location: (2:18)-(2:18))
+        │       │       │               │       ├── parsed: true
+        │       │       │               │       └── valid: true
+        │       │       │               │
+        │       │       │               ├── close_quote: """ (location: (2:18)-(2:18))
+        │       │       │               └── quoted: true
         │       │       │
         │       │       │
-        │       │       ├── equals: "=" (location: (2:11)-(2:11))
-        │       │       └── value:
-        │       │           └── @ HTMLAttributeValueNode (location: (2:11)-(2:18))
-        │       │               ├── open_quote: """ (location: (2:11)-(2:11))
-        │       │               ├── children: (1 item)
-        │       │               │   └── @ ERBContentNode (location: (2:11)-(2:18))
-        │       │               │       ├── tag_opening: "<%=" (location: (2:11)-(2:11))
-        │       │               │       ├── content: "classes" (location: (2:11)-(2:18))
-        │       │               │       ├── tag_closing: "%>" (location: (2:18)-(2:18))
-        │       │               │       ├── parsed: true
-        │       │               │       └── valid: true
-        │       │               │
-        │       │               ├── close_quote: """ (location: (2:18)-(2:18))
-        │       │               └── quoted: true
+        │       │       ├── else_clause: ∅
+        │       │       └── end_node:
+        │       │           └── @ ERBEndNode (location: (2:18)-(2:18))
+        │       │               ├── tag_opening: "<%" (location: (2:18)-(2:18))
+        │       │               ├── content: " end " (location: (2:18)-(2:18))
+        │       │               └── tag_closing: "%>" (location: (2:18)-(2:18))
         │       │
         │       │
         │       └── is_void: false

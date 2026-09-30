@@ -18,15 +18,18 @@ module SlimTestSupport
     end
   end
 
-  def self.slim_handler
+  # `options` are extra Slim engine options (e.g. `shortcut:` and `merge_attrs:`).
+  def self.slim_handler(**options)
     raise LoadError, render_dependency_error if render_dependency_error
 
-    @slim_handler ||= Temple::Templates::Rails(
+    @slim_handlers ||= {}
+    @slim_handlers[options] ||= Temple::Templates::Rails(
       Slim::Engine,
       generator: Temple::Generators::RailsOutputBuffer,
       disable_capture: true,
       format: :html,
-      js_wrapper: nil
+      js_wrapper: nil,
+      **options
     ).new
   end
 
@@ -270,9 +273,10 @@ module SlimTestSupport
       erb
     end
 
-    def render_slim(source, locals = {})
+    def render_slim(source, locals = {}, slim_options: {})
       view = build_view
-      template = ActionView::Template.new(source, "(slim)", SlimTestSupport.slim_handler, locals: locals.keys, format: :html)
+      handler = SlimTestSupport.slim_handler(**slim_options)
+      template = ActionView::Template.new(source, "(slim)", handler, locals: locals.keys, format: :html)
 
       template.render(view, locals).to_s
     end
@@ -300,12 +304,14 @@ module SlimTestSupport
     end
 
     # Renders the Slim source with the slim gem and the HTML+ERB printed from Herb's tree with ActionView,
-    # and asserts both produce the same HTML (attribute order and entity encoding are normalized).
-    def assert_slim_renders_like_erb(source, locals = {}, **)
+    # and asserts both produce the same HTML (attribute order and entity encoding are normalized). The tree is
+    # parsed with `exact_semantics: true`, which lowers Slim's runtime semantics into the printed ERB.
+    # `slim_options` are passed to the slim gem, the other options to `Herb.parse`.
+    def assert_slim_renders_like_erb(source, locals = {}, slim_options: {}, **)
       skip SlimTestSupport.render_dependency_error if SlimTestSupport.render_dependency_error
 
-      erb = slim_to_erb(source, **)
-      expected = render_slim(source, locals)
+      erb = slim_to_erb(source, exact_semantics: true, **)
+      expected = render_slim(source, locals, slim_options: slim_options)
       actual = render_erb(erb, locals)
 
       assert_equal normalize_html(expected), normalize_html(actual), <<~MESSAGE

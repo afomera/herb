@@ -284,6 +284,64 @@ module Slim
       assert_raises(ArgumentError) { Herb.parse("p Hi", language: "haml") }
     end
 
+    test "one-line case when" do
+      assert_slim_snapshot(<<~SLIM)
+        - case x when 1
+          p One
+        - when 2
+          p Two
+      SLIM
+    end
+
+    test "heredoc in embedded ruby" do
+      assert_slim_snapshot(<<~SLIM)
+        ruby:
+          message = <<~MSG
+            Hi
+          MSG
+        p = message
+      SLIM
+    end
+
+    test "legacy doctypes and xml encoding" do
+      assert_slim_snapshot(<<~SLIM)
+        doctype strict
+        doctype frameset
+        doctype transitional
+        doctype xml ISO-8859-1
+      SLIM
+    end
+
+    test "source-faithful tree: printed ERB keeps Ruby values as ERB output" do
+      erb = slim_to_erb(<<~SLIM)
+        a.link href=@url class=extra data={ id: 1 } *attrs Link
+        *{ tag: "h1", id: "t" } Title
+      SLIM
+
+      assert_equal(
+        %(<a class="link <%=extra%>" href="<%=@url%>" <%= tag.attributes(data: { id: 1 }) %> ) +
+          %(<%= tag.attributes(**attrs) %>>Link</a><h1 <%= tag.attributes(**{ id: "t" }) %>>Title</h1>),
+        erb
+      )
+    end
+
+    test "strict locals magic comment" do
+      assert_slim_snapshot(<<~SLIM, strict_locals: true)
+        /# locals: (title:, count: 0)
+        p = title
+      SLIM
+    end
+
+    test "a plain comment starting with locals: is not strict locals, like in Rails" do
+      result = parse_slim("/ locals: (title:)\np = title", strict_locals: true)
+
+      assert_instance_of Herb::AST::ERBCommentNode, result.value.children.first
+    end
+
+    test "class comma list" do
+      assert_equal %(<div class="alpha <%=[:beta,:gamma]%>">Classes</div>), slim_to_erb(".alpha class=:beta,:gamma Classes")
+    end
+
     test "printed ERB" do
       erb = slim_to_erb(<<~SLIM)
         #main.a
@@ -294,6 +352,129 @@ module Slim
       SLIM
 
       assert_equal %(<div id="main" class="a"><%if admin%><p><%=name%></p><%else%><p>Guest</p><% end %></div>), erb
+    end
+  end
+
+  # `exact_semantics: true` lowers Slim's runtime semantics into the tree (for exact HTML rendering).
+  class ExactSemanticsTest < Minitest::Spec
+    include SnapshotUtils
+    include SlimTestSupport::TestHelper
+
+    def assert_exact_snapshot(source)
+      assert_parsed_snapshot(source, language: "slim", exact_semantics: true)
+    end
+
+    test "dynamic attribute values" do
+      assert_exact_snapshot("a href=@url title=post.title(true) data-raw==html Link")
+    end
+
+    test "dynamic class values" do
+      assert_exact_snapshot(<<~SLIM)
+        .a class=extra
+        span class=classes
+      SLIM
+    end
+
+    test "attribute splat with shortcuts" do
+      assert_exact_snapshot("#a.b *attrs Content")
+    end
+
+    test "dynamic tag" do
+      assert_exact_snapshot(<<~SLIM)
+        *{ tag: "h1" } Title
+        *attrs /
+      SLIM
+    end
+
+    test "data hash attribute" do
+      assert_exact_snapshot("div data={ id: 1 } Content")
+    end
+
+    test "literal ERB opener in text" do
+      assert_exact_snapshot("p a <% b")
+    end
+
+    test "option is exposed on the parse result" do
+      assert parse_slim("p Hi", exact_semantics: true).options.exact_semantics
+      refute parse_slim("p Hi").options.exact_semantics
+    end
+
+    test "printed ERB lowers nil and true attribute values" do
+      erb = slim_to_erb("a href=@url Link", exact_semantics: true)
+
+      assert_equal %(<a<% if @url == true %> href<% elsif @url %> href="<%= @url %>"<% end %>>Link</a>), erb
+    end
+  end
+
+  # `slim_shortcuts` and `slim_merge_attrs` (Slim's `shortcut` and `merge_attrs` options).
+  class ConfiguredParserTest < Minitest::Spec
+    include SnapshotUtils
+    include SlimTestSupport::TestHelper
+
+    OPTIONS = {
+      slim_shortcuts: { "~" => "data-testid", "#" => "id", "." => "class" },
+      slim_merge_attrs: { "class" => " ", "data-controller" => " " },
+    }.freeze
+
+    test "data-testid shortcut" do
+      assert_parsed_snapshot("div.some-class~this-element-test-id Hello", language: "slim", **OPTIONS)
+    end
+
+    test "stacked data-controller values" do
+      assert_parsed_snapshot(%(div data-controller="a" data-controller=b Hi), language: "slim", **OPTIONS)
+    end
+
+    test "stacked data-controller values with exact semantics" do
+      assert_parsed_snapshot(%(div data-controller="a" data-controller=b Hi), language: "slim", exact_semantics: true, **OPTIONS)
+    end
+
+    test "printed ERB" do
+      erb = slim_to_erb(<<~SLIM, **OPTIONS)
+        .a~t data-controller="x" data-controller="y" data-controller=z Hi
+      SLIM
+
+      assert_equal %(<div class="a" data-testid="t" data-controller="x y <%=z%>">Hi</div>), erb
+    end
+
+    test "duplicate attributes that aren't merged are still an error" do
+      result = parse_slim(%(div data-controller="a" data-controller="b"))
+
+      assert_equal ["Duplicate attribute"], result.errors.map { _1.message[/\A[^.]+/] }
+    end
+
+    test "the options replace the default shortcuts" do
+      erb = slim_to_erb("~a.b", slim_shortcuts: { "~" => "data-testid" })
+
+      assert_equal %(<div data-testid="a">.b</div>), erb
+    end
+
+    test "tag shortcuts, multiple attributes and additional attributes" do
+      erb = slim_to_erb(<<~SLIM, slim_shortcuts: { "@" => "tag:section role", "&" => "class role", "^" => "tag:script data-x type=application/json", "c" => "tag:container" })
+        @main A
+        &admin B
+        ^x C
+        c D
+      SLIM
+
+      assert_equal(
+        %(<section role="main">A</section><div class="admin" role="admin">B</div>) +
+          %(<script data-x="x" type="application/json">C</script><container>D</container>),
+        erb
+      )
+    end
+
+    test "invalid shortcut configuration is reported" do
+      result = parse_slim("p", slim_shortcuts: { "a" => "id", "~" => "" })
+
+      assert_equal 2, result.errors.size
+    end
+
+    test "options are exposed on the parse result" do
+      options = parse_slim("p", **OPTIONS).options
+
+      assert_equal({ "~" => "data-testid", "#" => "id", "." => "class" }, options.slim_shortcuts)
+      assert_equal({ "class" => " ", "data-controller" => " " }, options.slim_merge_attrs)
+      assert_equal({ "#" => "id", "." => "class" }, parse_slim("p").options.slim_shortcuts)
     end
   end
 
@@ -344,6 +525,17 @@ module Slim
 
     test "duplicate attribute" do
       assert_slim_snapshot(%(#a id="b" Duplicate))
+    end
+
+    test "illegal shortcut" do
+      assert_slim_snapshot(<<~SLIM)
+        .#test
+        div.#test
+      SLIM
+    end
+
+    test "unsupported dynamic tag with extra attributes" do
+      assert_slim_snapshot("*attrs.merge(a: 1) title=\"x\" Content")
     end
 
     test "explicit end" do
