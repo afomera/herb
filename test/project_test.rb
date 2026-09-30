@@ -74,4 +74,24 @@ class ProjectTest < Minitest::Spec
   test "finds no templates in an empty project" do
     assert_empty files_for(@project_path)
   end
+
+  test "compiles Slim templates with the project's Slim settings" do
+    write_config(<<~YAML)
+      slim:
+        shortcuts:
+          "~":
+            attr: data-testid
+    YAML
+
+    source = "p~intro = title\n"
+    path = write("app/views/posts/show.html.slim", source)
+
+    project = Herb::Project.new(@project_path)
+    options = project.send(:engine_language_options, path)
+
+    assert_equal :successful, project.send(:compile_file, path, source)[:status]
+    assert_equal "slim", options[:language]
+    assert_equal "data-testid", options[:parser_options][:slim_shortcuts]["~"]
+    assert_empty project.send(:engine_language_options, "app/views/posts/show.html.erb")
+  end
 end

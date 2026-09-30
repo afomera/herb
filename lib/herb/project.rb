@@ -491,18 +491,15 @@ module Herb
     end
 
     def compile_file(file_path, file_content)
-      unless TemplateLanguage.erb?(file_path)
-        reason = "Herb::Engine only compiles ERB templates"
-
-        return { status: :skipped, skip_reason: reason, log: "⊘ Skipping #{file_path}: #{reason}" }
-      end
-
       require_relative "engine"
       require_relative "engine/validators"
+
+      language_options = engine_language_options(file_path)
 
       Herb::Engine.new(
         file_content,
         filename: file_path,
+        **language_options,
         escape: true,
         validate_ruby: validate_ruby,
         visitors: Herb::Engine::Validators.all
@@ -522,7 +519,7 @@ module Herb
 
       # Retry without validators
       begin
-        Herb::Engine.new(file_content, filename: file_path, escape: true, visitors: [], validate_ruby: validate_ruby)
+        Herb::Engine.new(file_content, filename: file_path, **language_options, escape: true, visitors: [], validate_ruby: validate_ruby)
         error_name = e.is_a?(Herb::Engine::SecurityError) ? "SecurityError" : "ValidationError"
         return { status: :validation_error, file_content: file_content,
                  compilation_error: compilation_error,
@@ -534,7 +531,7 @@ module Herb
 
       # Retry without strict mode
       begin
-        Herb::Engine.new(file_content, filename: file_path, escape: true, strict: false, validate_ruby: validate_ruby)
+        Herb::Engine.new(file_content, filename: file_path, **language_options, escape: true, strict: false, validate_ruby: validate_ruby)
         return { status: :strict_compilation_failed, file_content: file_content,
                  compilation_error: compilation_error,
                  diagnostics: [{ name: "CompilationError", message: "#{e.message} (strict mode)" }],
@@ -552,6 +549,18 @@ module Herb
         compilation_error: { error: "#{e.class}: #{e.message}", backtrace: e.backtrace&.first(10) || [] },
         diagnostics: [{ name: e.class.to_s, message: e.message }],
         log: "❌ Unexpected compilation error for #{file_path}: #{e.class}: #{e.message}" }
+    end
+
+    # A Slim template compiles with this project's Slim settings, which may not be the ones
+    # `Herb.configuration` loaded if the project isn't the working directory. ERB templates keep
+    # the engine's defaults.
+    #: (String) -> Hash[Symbol, untyped]
+    def engine_language_options(file_path)
+      return {} if TemplateLanguage.erb?(file_path)
+
+      defaults = configuration.engine_option("parser_options", {}).transform_keys(&:to_sym)
+
+      { language: TemplateLanguage.for_path(file_path), parser_options: defaults.merge(configuration.slim_parser_options) }
     end
 
     def merge_file_result(result, tracker, log)
