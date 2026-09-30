@@ -4,7 +4,7 @@ import { glob } from "tinyglobby"
 import { join } from "node:path"
 import { readFileSync } from "node:fs"
 
-import { getTagLocalName, isERBCaseNode, isERBIfNode, isERBOutputNode, isERBRenderNode, isERBUnlessNode, isHTMLElementNode, isPrismNodeType, isRubyRenderLocalNode } from "@herb-tools/core"
+import { getTagLocalName, isERBCaseNode, isERBIfNode, isERBOutputNode, isERBRenderNode, isERBUnlessNode, isHTMLElementNode, isPrismNodeType, isRubyRenderLocalNode, languageForPath } from "@herb-tools/core"
 import { outranksTemplate } from "./partial-index"
 import { layoutCandidatesFor, templateNameForFile, isPartialPath } from "./partial-resolution"
 import { renderPartialExpression } from "./render-expression"
@@ -186,7 +186,7 @@ export function collectCallSites(herb: HerbBackend, partials: PartialIndex, file
 
   let unresolved = 0
 
-  const { sites, yields, isDocumentRoot, roots } = scanTemplate(herb.parse(source, PARSER_OPTIONS).value)
+  const { sites, yields, isDocumentRoot, roots } = scanTemplate(herb.parse(source, { ...PARSER_OPTIONS, language: languageForPath(file) }).value)
 
   for (const { node, ancestors, ancestorAttributes } of sites) {
     const name = partialNameRenderedBy(node)

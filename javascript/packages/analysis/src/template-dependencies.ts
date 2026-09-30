@@ -1,4 +1,4 @@
-import { helperExists } from "@herb-tools/core"
+import { helperExists, languageForPath } from "@herb-tools/core"
 
 import { RubyDependencyCollector } from "./ruby-dependency-collector"
 import { RenderCallCollector } from "./render-call-collector"
@@ -25,7 +25,7 @@ export interface DependencyOptions {
 
 export function collectTemplateDependencies(backend: HerbBackend, file: string, source: string, options: DependencyOptions = {}): TemplateDependencies {
   const custom = new Set(options.customHelpers ?? [])
-  const parsed = backend.parse(source, PARSER_OPTIONS)
+  const parsed = backend.parse(source, { ...PARSER_OPTIONS, language: languageForPath(file) })
   const document = parsed.value as DocumentNode
 
   const renders = new RenderCallCollector()

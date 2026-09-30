@@ -2,6 +2,7 @@ import { join } from "node:path"
 import { glob } from "tinyglobby"
 import { readFileSync } from "node:fs"
 import { PartialIndex, STRICT_LOCALS_MARKER, declarationFromDocument, declarationWithoutStrictLocals, outranksTemplate } from "./partial-index"
+import { languageForPath } from "@herb-tools/core"
 import { PARTIAL_GLOB_PATTERN, TEMPLATE_GLOB_PATTERN, isPartialPath, partialNameForFile } from "./partial-resolution"
 
 import type { HerbBackend } from "@herb-tools/core"
@@ -30,7 +31,7 @@ export async function findViewRoot(projectPath: string): Promise<string> {
 export function declarationFromSource(herb: HerbBackend, file: string, source: string): PartialDeclaration {
   if (!source.includes(STRICT_LOCALS_MARKER)) return declarationWithoutStrictLocals(file)
 
-  return declarationFromDocument(herb.parse(source, PARSER_OPTIONS).value, file)
+  return declarationFromDocument(herb.parse(source, { ...PARSER_OPTIONS, language: languageForPath(file) }).value, file)
 }
 
 export function declarationFromFile(herb: HerbBackend, projectPath: string, file: string): PartialDeclaration | null {
