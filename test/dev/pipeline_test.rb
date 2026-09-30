@@ -277,12 +277,12 @@ module Dev
       assert_equal({ type: "asset", kind: "script", file: "app/assets/builds/application.js" }, server.messages.first.first)
     end
 
-    test "a Slim change never reaches the host compiler, and browsers refetch" do
+    test "a Slim change reaches the host compiler with its source and path" do
       server = FakeServer.new
       compiled_files = []
 
-      compiler = lambda do |_source, path|
-        compiled_files << path
+      compiler = lambda do |source, path|
+        compiled_files << [source, path]
         compiled
       end
 
@@ -290,11 +290,52 @@ module Dev
         event(:changed, "a.html.slim", "p Hi\n", "p Hello\n")
       )
 
+      assert_equal [["p Hello\n", "a.html.slim"]], compiled_files
+      assert_equal(["schema", "invalidate"], server.messages.map { |message, _| message[:type] })
+    end
+
+    test "a Slim text edit is a static invalidate the browsers patch in place" do
+      server = FakeServer.new
+
+      pipeline(server, compiler: ->(_source, _path) { compiled }).handle_event(
+        event(:changed, "a.html.slim", "div\n  p Hi\n", "div\n  p Hello\n")
+      )
+
+      invalidate = server.messages.map(&:first).find { |message| message[:type] == "invalidate" }
+
+      assert_equal "static", invalidate[:scope]
+      assert_equal "abcd1234", invalidate[:version]
+      assert_equal [0, 0, 0], invalidate[:node_path]
+    end
+
+    test "a Slim attribute edit without a compiler is a static invalidate" do
+      server = FakeServer.new
+
+      pipeline(server).handle_event(event(:changed, "a.html.slim", "p.old Hi\n", "p.new Hi\n"))
+
       message, = server.messages.first
 
-      assert_empty compiled_files
       assert_equal "invalidate", message[:type]
-      assert_equal "fetch", message[:scope]
+      assert_equal "static", message[:scope]
+    end
+
+    test "a structural Slim edit fetches and remaps slots across the insertion" do
+      server = FakeServer.new
+      results = [
+        compiled(version: "v1", slot_entries: [{ index: 0, type: :child, node_path: [0, 1, 0] }]),
+        compiled(version: "v2", slot_entries: [{ index: 0, type: :child, node_path: [0, 2, 0] }])
+      ]
+      subject = pipeline(server, compiler: ->(_source, _path) { results.shift })
+
+      subject.handle_event(event(:changed, "a.html.slim", "div\n  h1 Hi\n  p = @a\n", "div\n  h1 Hey\n  p = @a\n"))
+      subject.handle_event(event(:changed, "a.html.slim", "div\n  h1 Hey\n  p = @a\n", "div\n  h1 Hey\n  h2 Sub\n  p = @a\n"))
+
+      messages = server.messages.map(&:first)
+      schema = messages.reverse.find { |message| message[:type] == "schema" }
+      invalidate = messages.reverse.find { |message| message[:type] == "invalidate" }
+
+      assert_equal "fetch", invalidate[:scope]
+      assert_equal({ "slots" => { "0" => 0 } }, schema[:remap])
     end
 
     test "a Slim parse error broadcasts an error message" do

@@ -138,9 +138,6 @@ module Herb
 
       #: (Watcher::Event, Classifier::Classification) -> void
       def handle_content_change(event, classification)
-        # The host compiler builds slot schemas, which only exist for ERB templates.
-        return handle_without_compiler(event, classification) unless TemplateLanguage.erb?(event.relative_path)
-
         compiler = @compiler.call
 
         return handle_without_compiler(event, classification) unless compiler

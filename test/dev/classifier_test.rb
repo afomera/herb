@@ -107,11 +107,84 @@ module Dev
       assert_equal 3, classification.errors.first.location.start.line
     end
 
-    test "any edit to a Slim template that parses is :dynamic" do
-      classifier = Herb::Dev::Classifier.new
+    def classify_slim(previous, current, configuration: nil)
+      Herb::Dev::Classifier.new(configuration: configuration).call(previous, current, "app/views/a.html.slim")
+    end
 
-      assert_equal :dynamic, classifier.call("p Hi\n", "p Hello\n", "app/views/a.html.slim").kind
-      assert_equal :none, classifier.call("p Hi\n", "p Hi\n", "app/views/a.html.slim").kind
+    SLIM = <<~SLIM
+      div.card
+        h1 Hello
+        p.lead title="x" = @name
+        - if @show
+          span Shown
+    SLIM
+
+    test "an unchanged Slim template is :none" do
+      assert_equal :none, classify_slim(SLIM, SLIM.dup).kind
+    end
+
+    test "a Slim edit that renders the same markup is :none" do
+      assert_equal :none, classify_slim(SLIM, SLIM.gsub(/^( +)/) { ::Regexp.last_match(1) * 2 }).kind
+      assert_equal :none, classify_slim(SLIM, SLIM.sub('title="x"', "title='x'")).kind
+      assert_equal :none, classify_slim("p.a Hi\n", "p class=\"a\" Hi\n").kind
+    end
+
+    test "a Slim text edit is :static" do
+      classification = classify_slim(SLIM, SLIM.sub("Hello", "World"))
+
+      assert_equal :static, classification.kind
+      assert_equal [:text_changed], classification.operations.map(&:type)
+      assert_equal [0, 0, 0], classification.node_path
+    end
+
+    test "a Slim text edit inside a branch is :static" do
+      assert_equal :static, classify_slim(SLIM, SLIM.sub("Shown", "Visible")).kind
+    end
+
+    test "a Slim attribute edit is :static" do
+      assert_equal :static, classify_slim(SLIM, SLIM.sub('"x"', '"y"')).kind
+      assert_equal :static, classify_slim(SLIM, SLIM.sub("p.lead", "p.lede")).kind
+      assert_equal :static, classify_slim(SLIM, SLIM.sub('title="x"', 'title="x" data-a="1"')).kind
+    end
+
+    test "Slim structural edits classify like their ERB equivalents" do
+      erb = "<div class=\"card\">\n  <h1>Hello</h1>\n  <p><%= @name %></p>\n</div>\n"
+      slim = "div.card\n  h1 Hello\n  p = @name\n"
+
+      pairs = [
+        [->(source) { source.sub("<h1>Hello</h1>\n", "<h1>Hello</h1>\n  <h2>Sub</h2>\n") }, ->(source) { source.sub("h1 Hello\n", "h1 Hello\n  h2 Sub\n") }],
+        [->(source) { source.sub("  <h1>Hello</h1>\n", "") }, ->(source) { source.sub("  h1 Hello\n", "") }],
+        [->(source) { source.sub("@name", "@title") }, ->(source) { source.sub("@name", "@title") }],
+        [->(source) { source.gsub("div", "section") }, ->(source) { source.sub("div", "section") }]
+      ]
+
+      pairs.each do |erb_edit, slim_edit|
+        erb_kind = classify(erb, erb_edit.call(erb)).kind
+        slim_kind = classify_slim(slim, slim_edit.call(slim)).kind
+
+        assert_equal :dynamic, erb_kind
+        assert_equal erb_kind, slim_kind
+      end
+    end
+
+    test "dropping a Slim boolean attribute is :static" do
+      assert_equal :static, classify_slim("input disabled=true\n", "input disabled=false\n").kind
+    end
+
+    test "configured ERB openers don't cap a Slim edit" do
+      configuration = Herb::Configuration.new(nil)
+      configuration.instance_variable_get(:@config)["parser"] = { "erb_openers" => ["<%%"] }
+
+      assert_equal :static, classify_slim(SLIM, SLIM.sub("Hello", "World"), configuration: configuration).kind
+    end
+
+    test "Slim diff options are the project's Slim settings with exact semantics" do
+      classifier = Herb::Dev::Classifier.new(configuration: Herb::Configuration.new(nil))
+      options = classifier.diff_options_for("app/views/a.html.slim")
+
+      assert_equal "slim", options[:language]
+      assert_equal true, options[:exact_semantics]
+      assert_equal({}, classifier.diff_options_for("app/views/a.html.erb"))
     end
 
     test "Slim templates parse with the project's Slim settings" do

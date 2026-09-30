@@ -23,8 +23,10 @@ module Herb
     # change classifies better than `:dynamic`.
     #
     # A Slim template is parsed as Slim, with the project's Slim settings, so its parse errors point
-    # at Slim lines. `Herb.diff` only diffs HTML+ERB, so any edit to a Slim template that still
-    # parses is `:dynamic`, and browsers refetch or reload the page that rendered it.
+    # at Slim lines. It is diffed as Slim with `exact_semantics`, the tree `Herb::Engine` compiles
+    # it from, so the operations describe what the page renders and their paths are the paths a
+    # host compiler's slot entries use. Since that diff is parsed with every option the template is,
+    # the configured ERB openers don't hold a Slim edit back from `:static`.
     #
     class Classifier
       PATCHABLE_TYPES = ["text_changed", "attribute_value_changed", "attribute_added", "attribute_removed"].freeze #: Array[String]
@@ -62,15 +64,24 @@ module Herb
         (@configuration || Herb::Configuration.default).parser_options_for_path(path)
       end
 
+      # The options both sides of an edit to the template at `path` are diffed with. An ERB
+      # template diffs with none, as it always has. A Slim template diffs as Slim, with the
+      # project's Slim settings and `exact_semantics`.
+      #: (String?) -> Hash[Symbol, untyped]
+      def diff_options_for(path)
+        return {} if path.nil? || TemplateLanguage.erb?(path)
+
+        parser_options_for(path).merge(exact_semantics: true)
+      end
+
       #: (String, String, ?String?) -> Classification
       def call(previous, current, path = nil)
-        return call_without_diff(previous, current, path) unless path.nil? || TemplateLanguage.erb?(path)
-
-        parse = Herb.parse(current, strict: true, analyze: true, **@parser_options)
+        parse = Herb.parse(current, strict: true, analyze: true, **parser_options_for(path))
 
         return classification(:parse_error, errors: parse.errors) if parse.errors.any?
 
-        diff = Herb.diff(previous, current, track_whitespace_changes: true)
+        diff_options = diff_options_for(path)
+        diff = Herb.diff(previous, current, track_whitespace_changes: true, **diff_options)
 
         return classification(:none) if diff.identical?
 
@@ -79,21 +90,18 @@ module Herb
 
         return classification(:whitespace, operations: operations) if significant.empty?
 
-        kind = self.class.can_patch?(significant) && @parser_options.empty? ? :static : :dynamic
+        kind = self.class.can_patch?(significant) && openers_understood?(diff_options) ? :static : :dynamic
 
         classification(kind, operations: operations, node_path: covering_path(significant))
       end
 
       private
 
-      #: (String, String, String) -> Classification
-      def call_without_diff(previous, current, path)
-        parse = Herb.parse(current, strict: true, analyze: true, **parser_options_for(path))
-
-        return classification(:parse_error, errors: parse.errors) if parse.errors.any?
-        return classification(:none) if previous == current
-
-        classification(:dynamic)
+      # An ERB diff parses without the configured openers, so it can only vouch for an edit when
+      # there are none. A Slim diff is parsed with them.
+      #: (Hash[Symbol, untyped]) -> bool
+      def openers_understood?(diff_options)
+        !diff_options.empty? || @parser_options.empty?
       end
 
       #: (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification

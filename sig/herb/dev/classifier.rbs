@@ -18,8 +18,10 @@ module Herb
     # change classifies better than `:dynamic`.
     #
     # A Slim template is parsed as Slim, with the project's Slim settings, so its parse errors point
-    # at Slim lines. `Herb.diff` only diffs HTML+ERB, so any edit to a Slim template that still
-    # parses is `:dynamic`, and browsers refetch or reload the page that rendered it.
+    # at Slim lines. It is diffed as Slim with `exact_semantics`, the tree `Herb::Engine` compiles
+    # it from, so the operations describe what the page renders and their paths are the paths a
+    # host compiler's slot entries use. Since that diff is parsed with every option the template is,
+    # the configured ERB openers don't hold a Slim edit back from `:static`.
     class Classifier
       PATCHABLE_TYPES: Array[String]
 
@@ -51,13 +53,21 @@ module Herb
       # : (String?) -> Hash[Symbol, untyped]
       def parser_options_for: (String?) -> Hash[Symbol, untyped]
 
+      # The options both sides of an edit to the template at `path` are diffed with. An ERB
+      # template diffs with none, as it always has. A Slim template diffs as Slim, with the
+      # project's Slim settings and `exact_semantics`.
+      # : (String?) -> Hash[Symbol, untyped]
+      def diff_options_for: (String?) -> Hash[Symbol, untyped]
+
       # : (String, String, ?String?) -> Classification
       def call: (String, String, ?String?) -> Classification
 
       private
 
-      # : (String, String, String) -> Classification
-      def call_without_diff: (String, String, String) -> Classification
+      # An ERB diff parses without the configured openers, so it can only vouch for an edit when
+      # there are none. A Slim diff is parsed with them.
+      # : (Hash[Symbol, untyped]) -> bool
+      def openers_understood?: (Hash[Symbol, untyped]) -> bool
 
       # : (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification
       def classification: (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification
