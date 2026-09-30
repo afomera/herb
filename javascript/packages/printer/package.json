@@ -11,7 +11,8 @@
     "directory": "javascript/packages/printer"
   },
   "bin": {
-    "herb-print": "bin/herb-print"
+    "herb-print": "bin/herb-print",
+    "herb-convert": "bin/herb-convert"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

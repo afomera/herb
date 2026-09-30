@@ -30,6 +30,17 @@ export default [
     external: isExternal,
   },
 
+  // `herb-convert` CLI entry point (CommonJS)
+  {
+    input: "src/herb-convert.ts",
+    output: {
+      file: "dist/herb-convert.js",
+      format: "cjs",
+      sourcemap: true,
+    },
+    external: isExternal,
+  },
+
   // Library exports (ESM)
   {
     input: "src/index.ts",
