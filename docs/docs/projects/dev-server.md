@@ -22,7 +22,13 @@ The server starts watching all template files in the directory, diffs changes us
 
 ### Slim templates
 
-`.slim` files are watched too. They are parsed as Slim with the project's Slim settings, so a parse error shows in the browser at its Slim line. `Herb.diff` only diffs HTML+ERB and slot schemas only exist for ERB, so no Slim edit is patched in place and the host's compiler is never asked for one: every edit that still parses tells the browser to refetch, which reloads a page that rendered the template (one carrying its [debug markers](/projects/engine#slim-in-rails)).
+`.slim` files are watched too. They are parsed as Slim with the project's Slim settings, so a parse error shows in the browser at its Slim line. An edit is diffed as Slim with [`exact_semantics`](/parser-options#exact-semantics), the tree `Herb::Engine` compiles the template from, so it is classified the way the equivalent ERB edit is: a text or attribute change is patched in place, an edit that renders the same markup (a reindent, a blank line, `'` for `"`, `p.a` for `p class="a"`) does nothing, and everything else refetches. The host's compiler is asked for a Slim template's slot schema like an ERB one's, so with [ReActionView](https://reactionview.dev) and `config.intercept_slim` a Slim page gets the same in-place patches as an ERB page. Without a host that compiles slots, a page that rendered the template reloads (one carrying its [debug markers](/projects/engine#slim-in-rails)).
+
+`Herb.diff` takes parser options for this, so a Slim pair can be diffed directly:
+
+```ruby
+Herb.diff(before, after, language: "slim", exact_semantics: true, **Herb.configuration.slim_parser_options)
+```
 
 ## Architecture
 

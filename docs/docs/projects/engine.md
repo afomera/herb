@@ -796,3 +796,5 @@ HerbDevTools.start()
 ```
 
 With the markers in place, the overlay outlines each Slim view and partial, shows the Slim that wrote each output (`= user.name`, `#{title}`), and opens the editor at its Slim line and column. [`herb dev`](/projects/dev-server) watches `.slim` files and reloads a page that rendered the template you saved.
+
+With [ReActionView](https://reactionview.dev), `config.intercept_slim = true` does all of this for you: it compiles `.slim` templates with Herb, adds the dev tools to a Slim layout in development, and compiles slots for Slim, so the dev server patches Slim edits in place instead of reloading. A Slim template opts into slots with `/ herb:slots` (or `/ herb:slots client`), the Slim spelling of `<%# herb:slots %>`.
