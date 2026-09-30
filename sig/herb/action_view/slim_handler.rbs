@@ -1,0 +1,89 @@
+# Generated from lib/herb/action_view/slim_handler.rb with RBS::Inline
+
+module Herb
+  module ActionView
+    # An Action View template handler that compiles `.slim` templates with `Herb::Engine` instead of
+    # the Slim gem. Herb parses the Slim into its HTML+ERB tree with `exact_semantics`, so the page
+    # renders what the Slim gem renders, and everything the engine does for ERB applies: debug
+    # markers pointing at Slim lines, validators, registered visitors (`Herb::Engine.register_visitor`),
+    # and Ruby errors reported on the Slim line they came from.
+    #
+    # It is opt-in. Register it for `:slim` from an initializer, which replaces the Slim gem's
+    # handler (slim-rails registers its own in a Railtie that runs earlier):
+    #
+    #     # config/initializers/herb_slim.rb
+    #     require "herb/action_view/slim_handler"
+    #
+    #     Herb::ActionView::SlimHandler.debug = Rails.env.development?
+    #
+    #     ActiveSupport.on_load(:action_view) do
+    #       ActionView::Template.register_template_handler :slim, Herb::ActionView::SlimHandler
+    #     end
+    #
+    # To move over a directory at a time, keep the Slim gem's handler for everything else:
+    #
+    #     handler = Herb::ActionView::SlimHandler.new(
+    #       only: ->(template) { template.identifier.include?("/app/views/admin/") },
+    #       fallback: Slim::RailsTemplate.new
+    #     )
+    #
+    #     ActionView::Template.register_template_handler :slim, handler
+    #
+    # The project's Slim settings (`slim:` in `.herb.yml`) are read from `Herb.configuration`.
+    class SlimHandler
+      # Adds `Herb::Engine::DebugVisitor` to templates under the project path, which is what the
+      # dev tools overlay reads. Off by default.
+      attr_accessor debug: bool
+
+      # Extra visitors for every template this handler compiles, as a list or a callable taking the
+      # `ActionView::Template`. `Herb::Engine.register_visitor` applies to every engine instead.
+      attr_accessor visitors: (Array[untyped] | ^(untyped) -> Array[untyped])?
+
+      # Where the templates the overlay can open live. Defaults to `Rails.root`.
+      attr_writer project_path: String?
+
+      # The engine class to compile with. Defaults to Rails' `ActionView::Template::Handlers::ERB::Herb`
+      # when Rails ships one (8.2), and to `Herb::ActionView::OutputBufferEngine` otherwise.
+      attr_writer engine_class: Class?
+
+      # : () -> String?
+      def self.project_path: () -> String?
+
+      # : () -> Class
+      def self.engine_class: () -> Class
+
+      # : () -> Class
+      def self.default_engine_class: () -> Class
+
+      def self.call: (untyped template, ?untyped source) -> untyped
+
+      def self.default: () -> untyped
+
+      def self.reset!: () -> untyped
+
+      # : (?only: (^(untyped) -> boolish)?, ?fallback: untyped, ?engine_class: Class?, ?visitors: untyped) -> void
+      def initialize: (?only: (^(untyped) -> boolish)?, ?fallback: untyped, ?engine_class: Class?, ?visitors: untyped) -> void
+
+      def call: (untyped template, ?untyped source) -> untyped
+
+      def supports_streaming?: () -> untyped
+
+      private
+
+      # : (untyped) -> Hash[Symbol, untyped]
+      def engine_options: (untyped) -> Hash[Symbol, untyped]
+
+      # : (untyped, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def annotate: (untyped, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # : (untyped) -> Array[untyped]
+      def visitors_for: (untyped) -> Array[untyped]
+
+      # : (untyped, untyped) -> Array[untyped]
+      def configured: (untyped, untyped) -> Array[untyped]
+
+      # : (untyped) -> bool
+      def local_template?: (untyped) -> bool
+    end
+  end
+end

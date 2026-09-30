@@ -281,6 +281,16 @@ module SlimTestSupport
       template.render(view, locals).to_s
     end
 
+    # Renders Slim through Action View with `Herb::ActionView::SlimHandler`, so with `Herb::Engine`.
+    def render_herb_slim(source, locals = {}, identifier: "(slim)", handler: nil)
+      require_relative "../../lib/herb/action_view/slim_handler"
+
+      view = build_view
+      template = ActionView::Template.new(source, identifier, handler || Herb::ActionView::SlimHandler, locals: locals.keys, format: :html)
+
+      template.render(view, locals).to_s
+    end
+
     def render_erb(source, locals = {})
       view = build_view
       handler = ActionView::Template::Handlers::ERB.new

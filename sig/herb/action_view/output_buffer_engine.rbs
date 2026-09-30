@@ -1,0 +1,29 @@
+# Generated from lib/herb/action_view/output_buffer_engine.rb with RBS::Inline
+
+module Herb
+  module ActionView
+    # `Herb::Engine` compiling for Action View: it appends to `@output_buffer` the way Rails' own
+    # ERB handler does, so `ActiveSupport::SafeBuffer` decides what gets escaped and block helpers
+    # capture their content.
+    #
+    # Rails 8.2 ships the same thing as `ActionView::Template::Handlers::ERB::Herb`, and
+    # `SlimHandler` uses that one when it is there. This is for Rails 8.1 and earlier.
+    class OutputBufferEngine < ::Herb::Engine
+      def initialize: (untyped input, ?untyped properties) -> untyped
+
+      private
+
+      def add_text: (untyped text) -> untyped
+
+      def add_expression: (untyped indicator, untyped code) -> untyped
+
+      def add_code: (untyped code) -> untyped
+
+      def add_postamble: (untyped _) -> untyped
+
+      def align_to_source_line: (untyped line) -> untyped
+
+      def flush_newline_if_pending: (untyped src) -> untyped
+    end
+  end
+end
