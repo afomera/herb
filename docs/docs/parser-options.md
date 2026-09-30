@@ -49,6 +49,10 @@ Any option you leave out falls back to its default. `Herb.parse_file`/`Herb.pars
 | `prism_program`                         | `Boolean` | `false`                                   | Attach the full Prism `ProgramNode` to the `DocumentNode`                                              |
 | `timeout`                               | `Number`  | `1` second (Ruby), `1000` ms (JavaScript) | Abort the parse after this duration. `0` disables the timeout                                          |
 | `max_errors`                            | `Integer` | `25`                                      | Stop collecting errors after this many. `nil`/`null` means unlimited                                   |
+| `language`                              | `String`  | `"erb"`                                   | The template language of the source: `"erb"` or `"slim"`                                               |
+| [`exact_semantics`](#exact-semantics)   | `Boolean` | `false`                                   | Slim only: lower Slim's runtime semantics into the tree, so its HTML+ERB renders exactly like Slim     |
+| [`slim_shortcuts`](#slim-shortcuts-and-slim-merge-attrs) | `Hash` | `{ "#" => "id", "." => "class" }` | Slim only: the tag and attribute shortcuts, like Slim's `shortcut` option                             |
+| [`slim_merge_attrs`](#slim-shortcuts-and-slim-merge-attrs) | `Hash` | `{ "class" => " " }`         | Slim only: attributes that may repeat and the separator their values are joined with                   |
 
 
 > [!NOTE]
@@ -326,6 +330,36 @@ An opener that ends in a letter, digit, or underscore only matches on a word bou
 Configured openers never shadow the openings Herb already knows. The longest match wins, and a built-in opening wins a tie, so `erb_openers: ["="]` leaves `<%==` alone. `Herb.default_erb_openings` returns the openings that are always recognized.
 
 Every Herb tool reads this from the `parser` section of your [configuration file](/configuration#parser-configuration), so a project using such tags does not have to pass the option by hand.
+
+## `exact_semantics`
+
+**Type:** `Boolean` **Default:** `false`
+
+With `language: "slim"`, Herb builds a source-faithful tree: `a href=@url` is an `a` element whose `href` value is `<%= @url %>`, `.a class=b` is one `class` attribute (`a`, then `<%= b %>`), and `*attrs` is a `RubyHTMLAttributesSplatNode` (`tag.attributes(**attrs)`). That is what the linter and the editor see, and what `herb convert` prints.
+
+Slim renders some of those differently than the plain HTML+ERB would: it omits an attribute whose Ruby value is `nil` or `false`, flattens and joins Array values of merged attributes (`class`), and merges splats with the element's other attributes. `exact_semantics: true` lowers those semantics into the tree, so its HTML+ERB renders exactly the HTML Slim renders (used for rendering and HTML comparisons):
+
+```ruby
+Herb.parse("a href=@url Link", language: "slim", exact_semantics: true)
+# <a<% if @url == true %> href<% elsif @url %> href="<%= @url %>"<% end %>>Link</a>
+```
+
+It is ignored for ERB.
+
+## `slim_shortcuts` and `slim_merge_attrs`
+
+**Type:** `Hash` (Ruby) / `Record<string, string>` (JavaScript)
+
+Slim projects can configure their own shortcuts and merged attributes (`Slim::Engine.set_options(shortcut: ..., merge_attrs: ...)`). The same settings go in the `slim` section of `.herb.yml`, or directly into these options. Each shortcut maps to whitespace-separated tokens: attribute names (`attr:` prefix optional), an optional `tag:name`, and `name=value` for Slim's `additional_attrs`. Both options replace the defaults, like Slim's options do.
+
+```ruby
+Herb.parse(
+  "div.some-class~this-element-test-id",
+  language: "slim",
+  slim_shortcuts: { "~" => "data-testid", "#" => "id", "." => "class", "@" => "tag:section role" },
+  slim_merge_attrs: { "class" => " ", "data-controller" => " " }
+)
+```
 
 ## Inspecting the Options Used for a Parse
 

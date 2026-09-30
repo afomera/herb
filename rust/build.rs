@@ -143,6 +143,7 @@ fn main() {
     .allowlist_var("ELEMENT_SOURCE_.*")
     .allowlist_var("HB_ALLOCATOR_.*")
     .allowlist_var("HERB_EXTRACT_.*")
+    .allowlist_var("HERB_DEFAULT_SLIM_.*")
     .derive_debug(true)
     .derive_default(false)
     .prepend_enum_name(false)

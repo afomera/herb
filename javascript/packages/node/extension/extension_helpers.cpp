@@ -207,6 +207,34 @@ napi_value CreateParseResult(napi_env env, AST_DOCUMENT_NODE_T* root, napi_value
   napi_create_string_utf8(env, herb_language_to_string(options->language), NAPI_AUTO_LENGTH, &language_value);
   napi_set_named_property(env, options_object, "language", language_value);
 
+  napi_value exact_semantics_value;
+  napi_get_boolean(env, options->exact_semantics, &exact_semantics_value);
+  napi_set_named_property(env, options_object, "exact_semantics", exact_semantics_value);
+
+  const struct {
+    const char* name;
+    const hb_string_T* pairs;
+    size_t count;
+  } string_maps[] = {
+    { "slim_shortcuts", options->slim_shortcuts, options->slim_shortcut_count },
+    { "slim_merge_attrs", options->slim_merge_attrs, options->slim_merge_attr_count },
+  };
+
+  for (const auto& string_map : string_maps) {
+    napi_value map;
+    napi_create_object(env, &map);
+
+    for (size_t index = 0; index < string_map.count; index++) {
+      napi_value key;
+      napi_value value;
+      napi_create_string_utf8(env, string_map.pairs[index * 2].data, string_map.pairs[index * 2].length, &key);
+      napi_create_string_utf8(env, string_map.pairs[index * 2 + 1].data, string_map.pairs[index * 2 + 1].length, &value);
+      napi_set_property(env, map, key, value);
+    }
+
+    napi_set_named_property(env, options_object, string_map.name, map);
+  }
+
   napi_set_named_property(env, result, "options", options_object);
 
   napi_value error_count_value;

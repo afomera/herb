@@ -138,6 +138,23 @@ val CreateParseResult(AST_DOCUMENT_NODE_T *root, const std::string& source, pars
   options_object.set("dot_notation_tags", val(options->dot_notation_tags));
   options_object.set("html", val(options->html));
   options_object.set("language", val(std::string(herb_language_to_string(options->language))));
+  options_object.set("exact_semantics", val(options->exact_semantics));
+
+  val slim_shortcuts = Object.new_();
+  for (size_t index = 0; index < options->slim_shortcut_count; index++) {
+    hb_string_T key = options->slim_shortcuts[index * 2];
+    hb_string_T value = options->slim_shortcuts[index * 2 + 1];
+    slim_shortcuts.set(std::string(key.data, key.length), std::string(value.data, value.length));
+  }
+  options_object.set("slim_shortcuts", slim_shortcuts);
+
+  val slim_merge_attrs = Object.new_();
+  for (size_t index = 0; index < options->slim_merge_attr_count; index++) {
+    hb_string_T key = options->slim_merge_attrs[index * 2];
+    hb_string_T value = options->slim_merge_attrs[index * 2 + 1];
+    slim_merge_attrs.set(std::string(key.data, key.length), std::string(value.data, value.length));
+  }
+  options_object.set("slim_merge_attrs", slim_merge_attrs);
 
   result.set("options", options_object);
   result.set("error_count", options->error_count != nullptr ? val(*options->error_count) : val::null());

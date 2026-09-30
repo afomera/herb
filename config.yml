@@ -717,6 +717,14 @@ parser_options:
       skip: ["java"]
       description: "ERB tag openers recognized in addition to the built-in ones, written without the leading `<%`."
 
+    # Only read by non-ERB frontends (`language: slim`). Off, the frontend builds a source-faithful tree
+    # (`href=@url` is an attribute whose value is `<%= @url %>`). On, it lowers the template language's
+    # runtime semantics into the tree so the printed HTML+ERB renders exactly what the language renders.
+    - name: "exact_semantics"
+      type: "boolean"
+      default: false
+      description: "Non-ERB languages only (`language: slim`): lower the language's runtime semantics (nil/false attribute omission, class merging, attribute splats, dynamic tags) into the tree, so the HTML+ERB it prints renders exactly the same HTML. Off by default, which builds a simpler, source-faithful tree. Ignored for ERB."
+
     - name: "herb_directives"
       type: "boolean"
       default: false
@@ -767,6 +775,24 @@ parser_options:
       type: "boolean"
       default: false
       description: "Whether ActionView render call detection was enabled during parsing."
+
+    # Slim's `merge_attrs` option (Temple::HTML::AttributeMerger).
+    - name: "slim_merge_attrs"
+      type: "string_map"
+      count_name: "slim_merge_attr_count"
+      default: { "class": " " }
+      skip: ["java"]
+      description: "Slim only: the attributes that may be given more than once, mapped to the separator their values are joined with, like Slim's `merge_attrs` option (e.g. `{ \"class\" => \" \", \"data-controller\" => \" \" }`). Replaces the default map."
+
+    # Slim's `shortcut` option (Slim::Parser). Keys are the shortcut characters; each value lists what the shortcut
+    # sets, as whitespace-separated tokens: an attribute name (`attr:` prefix optional, several for one shortcut) and
+    # an optional `tag:name` (the tag a line starting with the shortcut gets; `div` by default).
+    - name: "slim_shortcuts"
+      type: "string_map"
+      count_name: "slim_shortcut_count"
+      default: { "#": "id", ".": "class" }
+      skip: ["java"]
+      description: "Slim only: the tag and attribute shortcuts, like Slim's `shortcut` option. Maps each shortcut (one or more non-word characters, or any characters for a tag-only shortcut) to whitespace-separated attribute names and an optional `tag:name`, e.g. `{ \"#\" => \"id\", \".\" => \"class\", \"~\" => \"data-testid\", \"@\" => \"tag:section role\" }`. Replaces the default map."
 
     - name: "strict"
       type: "boolean"

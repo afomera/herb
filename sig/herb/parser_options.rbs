@@ -12,6 +12,8 @@ module Herb
 
     attr_reader erb_openers: Array[String]
 
+    attr_reader exact_semantics: bool
+
     attr_reader herb_directives: bool
 
     attr_reader html: bool
@@ -29,6 +31,10 @@ module Herb
     attr_reader prism_program: bool
 
     attr_reader render_nodes: bool
+
+    attr_reader slim_merge_attrs: Hash[String | Symbol, String]
+
+    attr_reader slim_shortcuts: Hash[String | Symbol, String]
 
     attr_reader strict: bool
 
@@ -50,6 +56,8 @@ module Herb
 
     DEFAULT_DOT_NOTATION_TAGS: bool
 
+    DEFAULT_EXACT_SEMANTICS: bool
+
     DEFAULT_HERB_DIRECTIVES: bool
 
     DEFAULT_HTML: bool
@@ -68,6 +76,10 @@ module Herb
 
     DEFAULT_RENDER_NODES: bool
 
+    DEFAULT_SLIM_MERGE_ATTRS: Hash[String | Symbol, String]
+
+    DEFAULT_SLIM_SHORTCUTS: Hash[String | Symbol, String]
+
     DEFAULT_STRICT: bool
 
     DEFAULT_STRICT_LOCALS: bool
@@ -80,11 +92,11 @@ module Herb
 
     DEFAULT_TRANSFORM_CONDITIONALS: bool
 
-    # : (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
-    def initialize: (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
+    # : (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?exact_semantics: bool, ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?slim_merge_attrs: Hash[String | Symbol, String], ?slim_shortcuts: Hash[String | Symbol, String], ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
+    def initialize: (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?exact_semantics: bool, ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?slim_merge_attrs: Hash[String | Symbol, String], ?slim_shortcuts: Hash[String | Symbol, String], ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
 
-    # : () -> Hash[Symbol, (bool | Numeric | String | Symbol | Array[String] | nil)]
-    def to_h: () -> Hash[Symbol, bool | Numeric | String | Symbol | Array[String] | nil]
+    # : () -> Hash[Symbol, (bool | Numeric | String | Symbol | Array[String] | Hash[String | Symbol, String] | nil)]
+    def to_h: () -> Hash[Symbol, bool | Numeric | String | Symbol | Array[String] | Hash[String | Symbol, String] | nil]
 
     # : () -> String
     def inspect: () -> String

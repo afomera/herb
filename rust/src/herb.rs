@@ -69,6 +69,22 @@ fn language_from_str(language: &str) -> crate::bindings::herb_language_T {
   }
 }
 
+fn string_map_items(map: &Option<Vec<(String, String)>>) -> Vec<crate::bindings::hb_string_T> {
+  map
+    .as_ref()
+    .map(|pairs| {
+      pairs
+        .iter()
+        .flat_map(|(key, value)| [key, value])
+        .map(|item| crate::bindings::hb_string_T {
+          data: item.as_ptr() as *mut std::ffi::c_char,
+          length: item.len() as u32,
+        })
+        .collect()
+    })
+    .unwrap_or_default()
+}
+
 pub fn parse(source: &str) -> Result<ParseResult, String> {
   parse_with_options(source, &ParserOptions::default())
 }
@@ -98,6 +114,9 @@ pub fn parse_with_options(source: &str, options: &ParserOptions) -> Result<Parse
       })
       .collect();
 
+    let slim_shortcut_items = string_map_items(&options.slim_shortcuts);
+    let slim_merge_attr_items = string_map_items(&options.slim_merge_attrs);
+
     let c_parser_options = crate::bindings::parser_options_T {
       track_whitespace: options.track_whitespace,
       track_locations: options.track_locations,
@@ -115,6 +134,27 @@ pub fn parse_with_options(source: &str, options: &ParserOptions) -> Result<Parse
       dot_notation_tags: options.dot_notation_tags,
       html: options.html,
       language: language_from_str(&options.language),
+      exact_semantics: options.exact_semantics,
+      slim_shortcuts: if options.slim_shortcuts.is_some() {
+        slim_shortcut_items.as_ptr()
+      } else {
+        crate::bindings::HERB_DEFAULT_SLIM_SHORTCUTS.as_ptr()
+      },
+      slim_shortcut_count: if options.slim_shortcuts.is_some() {
+        slim_shortcut_items.len() / 2
+      } else {
+        crate::bindings::HERB_DEFAULT_SLIM_SHORTCUTS_COUNT as usize
+      },
+      slim_merge_attrs: if options.slim_merge_attrs.is_some() {
+        slim_merge_attr_items.as_ptr()
+      } else {
+        crate::bindings::HERB_DEFAULT_SLIM_MERGE_ATTRS.as_ptr()
+      },
+      slim_merge_attr_count: if options.slim_merge_attrs.is_some() {
+        slim_merge_attr_items.len() / 2
+      } else {
+        crate::bindings::HERB_DEFAULT_SLIM_MERGE_ATTRS_COUNT as usize
+      },
       start_line: 0,
       start_column: 0,
       timeout_ms: options.timeout,
@@ -380,6 +420,11 @@ pub fn diff_with_options(old_source: &str, new_source: &str, options: &DiffOptio
       transform_conditionals: false,
       html: true,
       language: crate::bindings::HERB_LANGUAGE_ERB,
+      exact_semantics: false,
+      slim_shortcuts: crate::bindings::HERB_DEFAULT_SLIM_SHORTCUTS.as_ptr(),
+      slim_shortcut_count: crate::bindings::HERB_DEFAULT_SLIM_SHORTCUTS_COUNT as usize,
+      slim_merge_attrs: crate::bindings::HERB_DEFAULT_SLIM_MERGE_ATTRS.as_ptr(),
+      slim_merge_attr_count: crate::bindings::HERB_DEFAULT_SLIM_MERGE_ATTRS_COUNT as usize,
       track_locations: true,
       start_line: 0,
       start_column: 0,
