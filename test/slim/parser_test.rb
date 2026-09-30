@@ -545,5 +545,11 @@ module Slim
         - end
       SLIM
     end
+
+    test "a herb:state directive in a Slim comment is not held to the ERB spelling" do
+      result = Herb.parse("/ herb:slots client\n/ herb:state (open: false)\np = open\n", language: "slim", exact_semantics: true, herb_directives: true)
+
+      assert_empty result.errors
+    end
   end
 end

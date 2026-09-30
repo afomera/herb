@@ -452,6 +452,10 @@ static void report_non_canonical(
   hb_allocator_T* allocator,
   const parser_options_T* options
 ) {
+  // The canonical spelling is a rule about ERB source. A Slim template writes the directive as a
+  // `/ herb:state (...)` comment, which the Slim frontend turns into an ERB comment of its own.
+  if (options != NULL && options->language != HERB_LANGUAGE_ERB) { return; }
+
   position_T start;
   position_T end;
 
