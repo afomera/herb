@@ -201,6 +201,9 @@ By default, Herb processes these file patterns:
 - `**/*.html+*.erb`
 - `**/*.rhtml`
 - `**/*.turbo_stream.erb`
+- `**/*.slim`
+
+Slim templates (`.slim`, `.html.slim`) are always parsed as Slim, never as ERB. The linter and the Language Server support them. The formatter skips them, since it only formats HTML+ERB for now.
 
 And excludes these patterns by default:
 - `coverage/**/*`
@@ -359,6 +362,36 @@ parser:
 An opener ending in a letter, digit, or underscore matches only on a word boundary, so `graphql` picks up `<%graphql query %>` and leaves `<%graphql_helper %>` as ordinary Ruby. See [Parser Options](/parser-options#erb-openers) for the full behavior.
 
 Unlike the `engine` section below, `parser` is read by every tool, since all of them have to agree on how a template is read.
+
+## Slim Configuration
+
+If your app configures the Slim gem with its own shortcuts or merged attributes, tell Herb the same, so `.slim` templates parse the way they render:
+
+```yaml [.herb.yml]
+slim:
+  shortcuts:
+    "#": { attr: id }
+    ".": { attr: class }
+    "~": { attr: data-testid }
+
+  merge_attrs:
+    class: " "
+    data-controller: " "
+```
+
+- `shortcuts` matches Slim's `:shortcut` option. Each entry takes an `attr` (a name or a list of names), a `tag`, or both. It replaces the default map (`#` for `id`, `.` for `class`), so list those too if you use them.
+- `merge_attrs` matches Slim's `:merge_attrs` option: attributes whose repeated values are joined, with the separator to join them with. It replaces the default (`class: " "`).
+
+### `herb:disable` in Slim
+
+Slim has no trailing comments, so a `herb:disable` directive is a Slim code comment on a line of its own. It applies to the next line that isn't blank or another comment:
+
+```slim
+/ herb:disable html-img-require-alt
+img src="logo.png"
+```
+
+File-scoped counts (`/ herb:disable html-img-require-alt 2`) work the same as in ERB.
 
 ## Engine Configuration <Badge type="tip" text="v0.9.0+" />
 
