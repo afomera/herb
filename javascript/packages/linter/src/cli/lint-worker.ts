@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 
 import { Herb } from "@herb-tools/node-wasm"
 import { Config } from "@herb-tools/config"
+import { languageForPath } from "@herb-tools/core"
 
 import { Linter } from "../linter.js"
 import { loadCustomRules } from "../loader.js"
@@ -96,12 +97,12 @@ async function run() {
   const ruleOffenses = new Map<string, { count: number, files: Set<string> }>()
   const fixMessages: string[] = []
 
-  const fixabilityOf = (offense: LintOffense): Fixability => {
+  const fixabilityOf = (offense: LintOffense, filename: string): Fixability => {
     const ruleClass = linter.rules.find(
       (rule) => rule.ruleName === offense.rule
     )
 
-    return fixabilityFor(offense, ruleClass)
+    return fixabilityFor(offense, ruleClass, languageForPath(filename))
   }
 
   for (const filename of data.files) {
@@ -137,7 +138,7 @@ async function run() {
           filename,
           offense,
           renderedFrom: offense.renderedFrom,
-          ...fixabilityOf(offense)
+          ...fixabilityOf(offense, filename)
         })
 
         const ruleData = ruleOffenses.get(offense.rule) || { count: 0, files: new Set() }
@@ -159,7 +160,7 @@ async function run() {
           filename,
           offense,
           renderedFrom: offense.renderedFrom,
-          ...fixabilityOf(offense)
+          ...fixabilityOf(offense, filename)
         })
 
         const ruleData = ruleOffenses.get(offense.rule) || { count: 0, files: new Set() }

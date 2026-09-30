@@ -10,7 +10,7 @@ import { resolve, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { availableParallelism } from "node:os"
 import { colorize } from "@herb-tools/highlighter"
-import { deserializeDiagnostic, didyoumean } from "@herb-tools/core"
+import { deserializeDiagnostic, didyoumean, languageForPath } from "@herb-tools/core"
 import { fixabilityFor } from "../fixability.js"
 import { buildPartialIndex, refreshPartialAfterFix } from "@herb-tools/analysis/node"
 import { buildRenderGraph } from "@herb-tools/analysis/node"
@@ -224,10 +224,10 @@ export class FileProcessor {
     }
   }
 
-  private fixabilityFor(offense: LintOffense): Fixability {
+  private fixabilityFor(offense: LintOffense, filename: string): Fixability {
     const ruleClass = this.linter?.rules.find(rule => rule.ruleName === offense.rule)
 
-    return fixabilityFor(offense, ruleClass)
+    return fixabilityFor(offense, ruleClass, languageForPath(filename))
   }
 
   async processFiles(files: string[], formatOption: FormatOption = 'detailed', context?: ProcessingContext): Promise<ProcessingResult> {
@@ -382,7 +382,7 @@ export class FileProcessor {
             filename,
             offense: offense,
             renderedFrom: offense.renderedFrom,
-            ...this.fixabilityFor(offense)
+            ...this.fixabilityFor(offense, filename)
           })
 
           const ruleData = ruleOffenses.get(offense.rule) || { count: 0, files: new Set() }
@@ -408,7 +408,7 @@ export class FileProcessor {
             filename,
             offense: offense,
             renderedFrom: offense.renderedFrom,
-            ...this.fixabilityFor(offense)
+            ...this.fixabilityFor(offense, filename)
           })
 
           const ruleData = ruleOffenses.get(offense.rule) || { count: 0, files: new Set() }

@@ -1,4 +1,4 @@
-import type { HerbDirectiveNode } from "@herb-tools/core"
+import type { HerbDirectiveNode, TemplateLanguage } from "@herb-tools/core"
 
 /**
  * Utilities for parsing herb:disable comments.
@@ -11,6 +11,11 @@ import type { HerbDirectiveNode } from "@herb-tools/core"
  *   - `rule-name` alone -> line-scoped disable (existing behavior)
  *   - `rule-name N`     -> file-scoped counter (suppress N offenses)
  *   - `rule-name all`   -> file-scoped counter (suppress every offense)
+ *
+ * In Slim templates the directive is a code comment on a line of its own, and its
+ * line-scoped entries apply to the next line that isn't blank or a comment:
+ *   / herb:disable rule-name [, rule-name...]
+ *   / herb:disable rule-name <N> [, rule-name <N|all>...]
  *
  * The two forms can be mixed in the same comment. Line-scoped entries are
  * surfaced through `ruleNames`/`ruleNameDetails` (so the existing meta-rules
@@ -243,7 +248,9 @@ export function parseHerbDisableContent(content: string): HerbDisableComment | n
  * @param line - The source line that may contain a herb:disable comment
  * @returns Parsed comment data or null if not a valid herb:disable comment
  */
-export function parseHerbDisableLine(line: string): HerbDisableComment | null {
+export function parseHerbDisableLine(line: string, language: TemplateLanguage = "erb"): HerbDisableComment | null {
+  if (language === "slim") return parseSlimHerbDisableLine(line)
+
   const startTag = "<%#"
   const endTag = "%>"
 
@@ -272,6 +279,57 @@ export function parseHerbDisableLine(line: string): HerbDisableComment | null {
   const fullMatch = line.substring(startIndex, endIndex + endTag.length)
 
   return buildResult(fullMatch, rulesString, entries)
+}
+
+/**
+ * A Slim code comment (`/`) on a line of its own. `/!` is an HTML comment and `/[` an IE
+ * conditional comment, both of which render, so neither can carry a directive.
+ */
+const SLIM_CODE_COMMENT = /^([ \t]*)\/(?![!\[])(.*)$/
+
+/**
+ * Parse a herb:disable comment from a line of a Slim template.
+ *
+ * Slim has no trailing comments, so the directive is a code comment on a line of its own:
+ *
+ *     / herb:disable html-img-require-alt
+ *     img src="logo.png"
+ *
+ * The match covers the comment from its `/` to the end of the line, without trailing whitespace.
+ *
+ * @param line - A line of a Slim template
+ * @returns Parsed comment data or null if the line isn't a valid herb:disable comment
+ */
+export function parseSlimHerbDisableLine(line: string): HerbDisableComment | null {
+  const comment = SLIM_CODE_COMMENT.exec(line)
+  if (!comment) return null
+
+  const content = comment[2].trim()
+  if (!content.startsWith(HERB_DISABLE_PREFIX)) return null
+
+  const afterPrefix = content.substring(HERB_DISABLE_PREFIX.length).trimStart()
+  if (afterPrefix.length === 0) return null
+
+  const rulesString = afterPrefix.trimEnd()
+
+  const herbDisablePrefix = line.indexOf(HERB_DISABLE_PREFIX)
+  const searchStart = herbDisablePrefix + HERB_DISABLE_PREFIX.length
+  const rulesStringOffset = line.indexOf(rulesString, searchStart)
+
+  const entries = parseEntries(rulesString, rulesStringOffset)
+  if (!entries) return null
+
+  const fullMatch = line.substring(comment[1].length).trimEnd()
+
+  return buildResult(fullMatch, rulesString, entries)
+}
+
+/**
+ * Whether a line of a Slim template is a code comment. Comments carrying a `herb:disable`
+ * directive are skipped over when finding the line a Slim directive applies to.
+ */
+export function isSlimCommentLine(line: string): boolean {
+  return SLIM_CODE_COMMENT.test(line)
 }
 
 /**

@@ -1,11 +1,12 @@
 import picomatch from "picomatch"
 
-import { DEFAULT_FRAMEWORK, Location, ParseResult, ParserOptions, semverGreaterThan } from "@herb-tools/core"
+import { DEFAULT_FRAMEWORK, Location, ParseResult, ParserOptions, semverGreaterThan, languageForPath, parserOptionsForLanguage } from "@herb-tools/core"
 import { IdentityPrinter, IndentPrinter } from "@herb-tools/printer"
 
 import { rules } from "./rules.js"
 import { findNodeByLocation } from "./utils/rule-utils.js"
-import { parseHerbDisableLine } from "./herb-disable-comment-utils.js"
+import { parseHerbDisableLine, isSlimCommentLine } from "./herb-disable-comment-utils.js"
+import { ruleRunsOn, ruleAutofixesIn } from "./rule-languages.js"
 import { hasLinterIgnoreDirective } from "./linter-ignore.js"
 import { ParseCache } from "./parse-cache.js"
 import { domToAST, sourcePathsIn, domNodesIn } from "./browser/dom-to-ast.js"
@@ -19,7 +20,7 @@ import { DEFAULT_RULE_CONFIG, DEFAULT_ENVIRONMENT } from "./types.js"
 import { resolveSeverity, ALL_RULES_KEY } from "@herb-tools/config/schema"
 
 import type { RuleClass, ParserRuleClass, LexerRuleClass, SourceRuleClass, Rule, ParserRule, LexerRule, SourceRule, LintResult, LintOffense, UnboundLintOffense, LintContext, AutofixResult, RuleVersion, LinterMode, Framework, FullRuleConfig, HerbCounterCacheEntry, HerbCounterDrift } from "./types.js"
-import type { DocumentNode, LexResult, HerbBackend } from "@herb-tools/core"
+import type { DocumentNode, LexResult, HerbBackend, TemplateLanguage } from "@herb-tools/core"
 import type { Environment } from "@herb-tools/config"
 import type { RuleConfig, Config } from "@herb-tools/config"
 
@@ -51,6 +52,21 @@ export interface LinterOptions {
    * Defaults to false.
    */
   silentCustomRules?: boolean
+}
+
+function isZeroWidthLocation(location: Location | undefined): boolean {
+  if (!location) return false
+
+  return location.start.line === location.end.line && location.start.column === location.end.column
+}
+
+/**
+ * A `herb:disable` comment and the line-scoped rules it lists, indexed by the line it applies to.
+ * In ERB that's the comment's own line; in Slim it's the next line (see `slimDirectiveTargetLine`).
+ */
+interface HerbDisableCommentLine {
+  line: number
+  ruleNames: string[]
 }
 
 export interface VersionSkippedRule {
@@ -378,6 +394,25 @@ export class Linter {
   }
 
   /**
+   * The template language a source is linted as.
+   *
+   * An explicit `language` in the context wins. Otherwise it comes from the file extension, so
+   * `show.html.slim` is parsed as Slim and everything else, including snippets without a file
+   * name, as ERB.
+   */
+  languageFor(context?: Partial<LintContext>): TemplateLanguage {
+    return context?.language ?? languageForPath(context?.fileName)
+  }
+
+  /**
+   * The parser options a template language needs: the language itself and, for Slim, the
+   * project's Slim settings (shortcuts, merge_attrs) from `.herb.yml`.
+   */
+  protected templateParserOptions(language: TemplateLanguage): Partial<ParserOptions> {
+    return parserOptionsForLanguage(language, { slim: this.config?.slim }) as Partial<ParserOptions>
+  }
+
+  /**
    * Execute a single rule and return its unbound offenses.
    * Handles rule type checking (Lexer/Parser/Source) and isEnabled checks.
    */
@@ -390,6 +425,10 @@ export class Linter {
     context?: Partial<LintContext>
   ): UnboundLintOffense[] {
     const ruleName = rule.ruleName
+
+    if (!ruleRunsOn(ruleClass, context?.language ?? "erb")) {
+      return []
+    }
 
     if (!this.onlyRules && !this.allRules && !this.appliesToFramework(rule, context?.framework)) {
       return []
@@ -467,7 +506,8 @@ export class Linter {
     ruleName: string,
     ignoredOffensesByLine?: Map<number, Set<string>>,
     herbDisableCache?: Map<number, string[]>,
-    ignoreDisableComments?: boolean
+    ignoreDisableComments?: boolean,
+    herbDisableCommentLines?: Map<number, HerbDisableCommentLine[]>
   ): { kept: LintOffense[], ignored: LintOffense[], wouldBeIgnored: LintOffense[] } {
     const kept: LintOffense[] = []
     const ignored: LintOffense[] = []
@@ -507,12 +547,16 @@ export class Linter {
         ignored.push(offense)
 
         if (ignoredOffensesByLine) {
-          if (!ignoredOffensesByLine.has(line)) {
-            ignoredOffensesByLine.set(line, new Set())
+          const comments = herbDisableCommentLines?.get(line) ?? []
+          const comment = comments.find(comment => comment.ruleNames.includes(ruleName)) ?? comments.find(comment => comment.ruleNames.includes("all"))
+          const commentLine = comment?.line ?? line
+
+          if (!ignoredOffensesByLine.has(commentLine)) {
+            ignoredOffensesByLine.set(commentLine, new Set())
           }
 
           const usedRuleName = disabledRules.includes(ruleName) ? ruleName : "all"
-          ignoredOffensesByLine.get(line)!.add(usedRuleName)
+          ignoredOffensesByLine.get(commentLine)!.add(usedRuleName)
         }
 
         continue
@@ -597,6 +641,45 @@ export class Linter {
 
 
   /**
+   * Drops offenses that point only at source the template doesn't have.
+   *
+   * A Slim template parses into the same HTML+ERB tree as ERB, but the tokens Slim has no
+   * spelling for (the `<` and `>` of a tag, close tags, `%>`, the `end` implied by indentation,
+   * the ERB escaping of a literal `<%`) are synthesized with a zero-width location. An offense
+   * anchored on one of those alone is about ERB that was never written, so there's nothing in
+   * the file to show or fix. Offenses that cover any real source are kept.
+   */
+  protected withoutSynthesizedOffenses(ruleClass: RuleClass, offenses: UnboundLintOffense[], language: TemplateLanguage): UnboundLintOffense[] {
+    if (language === "erb") return offenses
+    if (!this.isParserRuleClass(ruleClass)) return offenses
+
+    return offenses.filter(offense => !isZeroWidthLocation(offense.location))
+  }
+
+  /**
+   * The line a Slim `/ herb:disable` comment applies to.
+   *
+   * Slim has no trailing comments, so a directive sits on a line of its own and covers the next
+   * line that isn't blank or another comment, the way `eslint-disable-next-line` does.
+   *
+   * @param lines - The source split into lines
+   * @param index - The zero-based index of the line holding the directive
+   * @returns The one-based line number the directive applies to, or null at the end of the file
+   */
+  protected slimDirectiveTargetLine(lines: string[], index: number): number | null {
+    for (let next = index + 1; next < lines.length; next++) {
+      const line = lines[next]
+
+      if (line.trim() === "") continue
+      if (isSlimCommentLine(line)) continue
+
+      return next + 1
+    }
+
+    return null
+  }
+
+  /**
    * Lint source code using Parser/AST, Lexer, and Source rules.
    * @param source - The source code to lint, or a DOM node to lint as a rendered page
    * @param context - Optional context for linting (e.g., fileName for distinguishing files vs snippets)
@@ -612,7 +695,9 @@ export class Linter {
     let ignoredCount = 0
     let wouldBeIgnoredCount = 0
 
-    const parseResult = this.parseCache.get(source)
+    const language = this.languageFor(context)
+    const templateOptions = this.templateParserOptions(language)
+    const parseResult = this.parseCache.get(source, templateOptions)
 
     if (hasLinterIgnoreDirective(parseResult)) {
       return {
@@ -625,7 +710,8 @@ export class Linter {
       }
     }
 
-    const lexResult = this.herb.lex(source)
+    // The lexer only knows ERB, so lexer rules (which never run on other languages) get nothing to read.
+    const lexResult = language === "erb" ? this.herb.lex(source) : null as unknown as LexResult
     const hasParserErrors = parseResult.recursiveErrors().length > 0
     const sourceLines = source.split("\n")
     const ignoredOffensesByLine = new Map<number, Set<string>>()
@@ -646,15 +732,22 @@ export class Linter {
       }
     }
 
+    const herbDisableCommentLines = new Map<number, HerbDisableCommentLine[]>()
+
     for (let i = 0; i < sourceLines.length; i++) {
       const line = sourceLines[i]
       const lineNumber = i + 1
 
       if (line.includes("herb:disable")) {
-        const herbDisable = parseHerbDisableLine(line)
+        const herbDisable = parseHerbDisableLine(line, language)
 
         if (herbDisable) {
-          herbDisableCache.set(lineNumber, herbDisable.ruleNames)
+          const targetLine = language === "slim" ? this.slimDirectiveTargetLine(sourceLines, i) : lineNumber
+
+          if (targetLine !== null) {
+            herbDisableCache.set(targetLine, [...(herbDisableCache.get(targetLine) ?? []), ...herbDisable.ruleNames])
+            herbDisableCommentLines.set(targetLine, [...(herbDisableCommentLines.get(targetLine) ?? []), { line: lineNumber, ruleNames: herbDisable.ruleNames }])
+          }
 
           for (const entry of herbDisable.fileScopedEntries) {
             if (herbCounterCache.has(entry.name)) continue
@@ -671,7 +764,7 @@ export class Linter {
               countLength: entry.countLength,
             })
           }
-        } else {
+        } else if (language === "erb") {
           herbDisableCache.set(lineNumber, [])
         }
       }
@@ -679,6 +772,7 @@ export class Linter {
 
     context = {
       ...context,
+      language,
       validRuleNames: this.getAvailableRules().map(ruleClass => ruleClass.ruleName),
       ignoredOffensesByLine,
       counterDriftByRule,
@@ -721,7 +815,7 @@ export class Linter {
     for (const ruleClass of regularRules) {
       const rule = new ruleClass()
       const parserOptions = this.parserOptionsFor(ruleClass, rule, context?.framework)
-      const parseResult = this.parseCache.get(source, parserOptions)
+      const parseResult = this.parseCache.get(source, { ...parserOptions, ...templateOptions })
 
       if (this.isParserRuleClass(ruleClass)) {
         if (parseResult.recursiveErrors().length > 0 && !ruleClass.consumesParserErrors) continue
@@ -729,7 +823,7 @@ export class Linter {
         continue
       }
 
-      const unboundOffenses = this.executeRule(ruleClass, rule, parseResult, lexResult, source, context)
+      const unboundOffenses = this.withoutSynthesizedOffenses(ruleClass, this.executeRule(ruleClass, rule, parseResult, lexResult, source, context), language)
       const boundOffenses = this.bindSeverity(unboundOffenses, ruleClass.ruleName)
 
       const { kept, ignored, wouldBeIgnored } = this.filterOffenses(
@@ -737,7 +831,8 @@ export class Linter {
         ruleClass.ruleName,
         ignoredOffensesByLine,
         herbDisableCache,
-        context?.ignoreDisableComments
+        context?.ignoreDisableComments,
+        herbDisableCommentLines
       )
 
       ignoredCount += ignored.length
@@ -761,13 +856,15 @@ export class Linter {
 
       const deferredRule = new deferredRuleClass() as Rule
 
+      if (!ruleRunsOn(deferredRuleClass, language)) continue
+
       if (this.isSourceRuleClass(deferredRuleClass)) {
         const unboundOffenses = (deferredRule as SourceRule).check(source, context)
         const boundOffenses = this.bindSeverity(unboundOffenses, deferredRuleClass.ruleName)
         this.offenses.push(...boundOffenses)
       } else {
         const parserRule = deferredRule as ParserRule
-        const deferredParseResult = this.parseCache.get(source, parserRule.parserOptions)
+        const deferredParseResult = this.parseCache.get(source, { ...parserRule.parserOptions, ...templateOptions })
         const unboundOffenses = parserRule.check(deferredParseResult, context)
         const boundOffenses = this.bindSeverity(unboundOffenses, deferredRuleClass.ruleName)
         this.offenses.push(...boundOffenses)
@@ -957,8 +1054,11 @@ export class Linter {
 
     const includeUnsafe = options?.includeUnsafe ?? false
 
+    const language = this.languageFor(context)
+
     context = {
       ...context,
+      language,
       indentWidth: context?.indentWidth ?? this.config?.formatter?.indentWidth,
       indentStyle: context?.indentStyle ?? this.config?.formatter?.indentStyle,
       framework: context?.framework ?? this.config?.framework,
@@ -971,10 +1071,20 @@ export class Linter {
     const lexerOffenses: LintOffense[] = []
     const sourceOffenses: LintOffense[] = []
 
+    const unfixable: LintOffense[] = []
+
     for (const offense of lintResult.offenses) {
       const ruleClass = this.findRuleClass(offense.rule)
 
       if (!ruleClass) continue
+
+      // A fix that would write HTML+ERB (or ERB-specific text) into another template language
+      // is reported as unfixable instead. See `ruleAutofixesIn` for the Slim printer hook.
+      if (!ruleAutofixesIn(ruleClass, language)) {
+        unfixable.push(offense)
+
+        continue
+      }
 
       if (this.isLexerRuleClass(ruleClass)) {
         lexerOffenses.push(offense)
@@ -987,10 +1097,10 @@ export class Linter {
 
     let currentSource = source
     const fixed: LintOffense[] = []
-    const unfixed: LintOffense[] = []
+    const unfixed: LintOffense[] = [...unfixable]
 
     if (parserOffenses.length > 0) {
-      const parseResult = this.parseCache.get(currentSource)
+      const parseResult = this.parseCache.get(currentSource, this.templateParserOptions(language))
       let needsReindent = false
 
       for (const offense of parserOffenses) {
@@ -1127,6 +1237,7 @@ export class Linter {
    */
   updateCounters(source: string, context?: Partial<LintContext>): { source: string, inserted: number, rewritten: number, deleted: number } {
     const lines = source.split("\n")
+    const language = this.languageFor(context)
 
     interface ExistingEntry {
       line: number
@@ -1139,7 +1250,7 @@ export class Linter {
     const knownRuleNames = new Set(this.rules.map(ruleClass => ruleClass.ruleName))
 
     for (let i = 0; i < lines.length; i++) {
-      const parsed = parseHerbDisableLine(lines[i])
+      const parsed = parseHerbDisableLine(lines[i], language)
       if (!parsed) continue
 
       for (const entry of parsed.fileScopedEntries) {
@@ -1210,7 +1321,7 @@ export class Linter {
     for (const op of [...deleteOps].sort((a, b) => b.line - a.line)) {
       const index = op.line - 1
       const original = lines[index]
-      const parsed = parseHerbDisableLine(original)
+      const parsed = parseHerbDisableLine(original, language)
       if (!parsed) continue
 
       const remaining = parsed.ruleNameDetails.length +

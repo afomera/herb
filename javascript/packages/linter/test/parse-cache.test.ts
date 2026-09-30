@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, vi } from "vitest"
 import { Herb } from "@herb-tools/node-wasm"
 import { ParseCache } from "../src/parse-cache.js"
 import { Linter } from "../src/linter.js"
-import { isWhitespaceNode } from "@herb-tools/core"
+import { isWhitespaceNode, DEFAULT_PARSER_OPTIONS } from "@herb-tools/core"
 import type { HTMLElementNode } from "@herb-tools/core"
 
 describe("ParseCache", () => {
@@ -67,6 +67,7 @@ describe("ParseCache", () => {
       const options = cache.resolveOptions({})
 
       expect(options).toEqual({
+        ...DEFAULT_PARSER_OPTIONS,
         track_whitespace: true,
         track_locations: true,
         analyze: true,
@@ -115,6 +116,7 @@ describe("ParseCache", () => {
       const options = cache.resolveOptions({ strict: false })
 
       expect(options).toEqual({
+        ...DEFAULT_PARSER_OPTIONS,
         track_whitespace: true,
         track_locations: true,
         analyze: true,
@@ -141,6 +143,7 @@ describe("ParseCache", () => {
       const options = cache.resolveOptions({ track_whitespace: false })
 
       expect(options).toEqual({
+        ...DEFAULT_PARSER_OPTIONS,
         track_whitespace: false,
         track_locations: true,
         analyze: true,
@@ -167,6 +170,7 @@ describe("ParseCache", () => {
       const options = cache.resolveOptions({ strict: false, analyze: false })
 
       expect(options).toEqual({
+        ...DEFAULT_PARSER_OPTIONS,
         track_whitespace: true,
         track_locations: true,
         analyze: false,

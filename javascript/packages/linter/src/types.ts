@@ -7,10 +7,10 @@ import type { AncestorChain, RenderGraph, PartialIndex } from "@herb-tools/analy
 import type { DOMNodeLike } from "./browser/dom-to-ast.js"
 import type { Framework, Environment, RuleConfig } from "@herb-tools/config"
 import type { Mutable } from "@herb-tools/rewriter"
-import type { RuleVersion } from "@herb-tools/core"
+import type { RuleVersion, TemplateLanguage } from "@herb-tools/core"
 
 export type { Mutable } from "@herb-tools/rewriter"
-export type { RuleVersion } from "@herb-tools/core"
+export type { RuleVersion, TemplateLanguage } from "@herb-tools/core"
 export type { Framework, SeverityConfig, LinterMode } from "@herb-tools/config"
 export { FRAMEWORKS, FRAMEWORK_NAMES } from "@herb-tools/config/schema"
 
@@ -136,6 +136,17 @@ export abstract class ParserRule<TAutofixContext extends BaseAutofixContext = Ba
   static consumesParserErrors = false
   /** Indicates that the rule reports about the project rather than the file, so a CLI run collapses its offenses down to the first one. Defaults to false. */
   static reportsOncePerRun = false
+  /**
+   * The template languages this rule runs on. Parser rules default to every language Herb parses
+   * into its syntax tree. Lexer and source rules read ERB tokens or raw ERB source, so they default
+   * to `["erb"]` and have to opt into other languages explicitly.
+   */
+  static languages?: readonly TemplateLanguage[]
+  /**
+   * The template languages this rule's autofix is safe to write into. Defaults to `["erb"]`, since
+   * most fixes print the tree back as HTML+ERB, which must never land in a Slim file.
+   */
+  static autofixLanguages?: readonly TemplateLanguage[]
 
   get ruleName(): string {
     return (this.constructor as typeof ParserRule).ruleName
@@ -214,6 +225,17 @@ export abstract class LexerRule<TAutofixContext extends BaseAutofixContext = Bas
   static unsafeAutocorrectable = false
   /** Indicates that `autofix` can only fix offenses that carry an `autofixContext`. Offenses without one are reported as not correctable. Defaults to false. */
   static autofixRequiresContext = false
+  /**
+   * The template languages this rule runs on. Parser rules default to every language Herb parses
+   * into its syntax tree. Lexer and source rules read ERB tokens or raw ERB source, so they default
+   * to `["erb"]` and have to opt into other languages explicitly.
+   */
+  static languages?: readonly TemplateLanguage[]
+  /**
+   * The template languages this rule's autofix is safe to write into. Defaults to `["erb"]`, since
+   * most fixes print the tree back as HTML+ERB, which must never land in a Slim file.
+   */
+  static autofixLanguages?: readonly TemplateLanguage[]
 
   get ruleName(): string {
     return (this.constructor as typeof LexerRule).ruleName
@@ -268,6 +290,8 @@ export interface LexerRuleConstructor {
   unsafeAutocorrectable?: boolean
   autofixRequiresContext?: boolean
   reportsOncePerRun?: boolean
+  languages?: readonly TemplateLanguage[]
+  autofixLanguages?: readonly TemplateLanguage[]
 }
 
 /**
@@ -320,6 +344,8 @@ export interface HerbCounterDrift {
  */
 export interface LintContext {
   fileName: string | undefined
+  /** The template language the source is written in. Derived from `fileName` when not given. */
+  language: TemplateLanguage | undefined
   validRuleNames: string[] | undefined
   ignoredOffensesByLine: Map<number, Set<string>> | undefined
   ignoreDisableComments: boolean | undefined
@@ -345,6 +371,7 @@ export interface ParkedRoot {
  */
 export const DEFAULT_LINT_CONTEXT: LintContext = {
   fileName: undefined,
+  language: undefined,
   validRuleNames: undefined,
   ignoredOffensesByLine: undefined,
   ignoreDisableComments: undefined,
@@ -377,6 +404,17 @@ export abstract class SourceRule<TAutofixContext extends BaseAutofixContext = Ba
   static unsafeAutocorrectable = false
   /** Indicates that `autofix` can only fix offenses that carry an `autofixContext`. Offenses without one are reported as not correctable. Defaults to false. */
   static autofixRequiresContext = false
+  /**
+   * The template languages this rule runs on. Parser rules default to every language Herb parses
+   * into its syntax tree. Lexer and source rules read ERB tokens or raw ERB source, so they default
+   * to `["erb"]` and have to opt into other languages explicitly.
+   */
+  static languages?: readonly TemplateLanguage[]
+  /**
+   * The template languages this rule's autofix is safe to write into. Defaults to `["erb"]`, since
+   * most fixes print the tree back as HTML+ERB, which must never land in a Slim file.
+   */
+  static autofixLanguages?: readonly TemplateLanguage[]
 
   get ruleName(): string {
     return (this.constructor as typeof SourceRule).ruleName
@@ -431,6 +469,8 @@ export interface SourceRuleConstructor {
   unsafeAutocorrectable?: boolean
   autofixRequiresContext?: boolean
   reportsOncePerRun?: boolean
+  languages?: readonly TemplateLanguage[]
+  autofixLanguages?: readonly TemplateLanguage[]
 }
 
 /**
@@ -449,6 +489,8 @@ export type ParserRuleClass = (new () => ParserRule) & {
   reindentAfterAutofix?: boolean
   consumesParserErrors?: boolean
   reportsOncePerRun?: boolean
+  languages?: readonly TemplateLanguage[]
+  autofixLanguages?: readonly TemplateLanguage[]
 }
 
 export type LexerRuleClass = LexerRuleConstructor
