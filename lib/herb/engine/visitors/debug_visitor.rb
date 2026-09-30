@@ -244,7 +244,7 @@ module Herb
       def create_debug_span_for_erb(erb_node)
         opening = erb_node.tag_opening.value
         code = erb_node.content.value.strip
-        erb_code = "#{opening} #{code} %>"
+        erb_code = erb? ? "#{opening} #{code} %>" : template_source_for(erb_node, opening, code)
 
         return erb_node if complex_rails_helper?(code)
 
@@ -300,6 +300,37 @@ module Herb
         )
       end
 
+      #: () -> bool
+      def erb?
+        context.language == "erb"
+      end
+
+      # What the author wrote for an output in a template that isn't ERB. In Slim that is `= code`,
+      # `== code`, or an interpolation, `#{code}` or `#{{code}}`, told apart by the source the tag
+      # starts at. Without the source, the output line form stands in for both.
+      #: (Herb::AST::ERBContentNode, String, String) -> String
+      def template_source_for(erb_node, opening, code)
+        raw = opening == "<%=="
+
+        if interpolation?(erb_node)
+          raw ? "\#{{#{code}}}" : "\#{#{code}}"
+        else
+          "#{raw ? "==" : "="} #{code}"
+        end
+      end
+
+      #: (Herb::AST::ERBContentNode) -> bool
+      def interpolation?(erb_node)
+        source = context[:source]
+        start = erb_node.location&.start
+
+        return false unless source.is_a?(String) && start&.line&.positive?
+
+        line = source.lines[start.line - 1]
+
+        line&.slice(start.column, 2) == "\#{"
+      end
+
       def determine_view_type
         if component?
           "component"
@@ -327,7 +358,7 @@ module Herb
         return false unless component?
         return false unless filename
 
-        filename.basename.to_s.match?(/\Acomponent\.(html\.erb|html\.herb|erb|herb)\z/)
+        filename.basename.to_s.match?(/\Acomponent\.(html\.erb|html\.herb|html\.slim|erb|herb|slim)\z/)
       end
 
       def component_display_name
@@ -341,7 +372,7 @@ module Herb
         end
 
         if component?
-          path_without_ext = path.sub(/\.(?:html\.erb|html\.herb|erb|herb)\z/, "")
+          path_without_ext = path.sub(/\.(?:html\.erb|html\.herb|html\.slim|erb|herb|slim)\z/, "")
 
           if (match = path_without_ext.match(%r{/components/(.+)\z}))
             return match[1].split("/").map { |s| classify(s) }.join("::")

@@ -64,6 +64,18 @@ module Herb
 
       def create_debug_span_for_erb: (untyped erb_node) -> untyped
 
+      # : () -> bool
+      def erb?: () -> bool
+
+      # What the author wrote for an output in a template that isn't ERB. In Slim that is `= code`,
+      # `== code`, or an interpolation, `#{code}` or `#{{code}}`, told apart by the source the tag
+      # starts at. Without the source, the output line form stands in for both.
+      # : (Herb::AST::ERBContentNode, String, String) -> String
+      def template_source_for: (Herb::AST::ERBContentNode, String, String) -> String
+
+      # : (Herb::AST::ERBContentNode) -> bool
+      def interpolation?: (Herb::AST::ERBContentNode) -> bool
+
       def determine_view_type: () -> untyped
 
       def partial?: () -> untyped
