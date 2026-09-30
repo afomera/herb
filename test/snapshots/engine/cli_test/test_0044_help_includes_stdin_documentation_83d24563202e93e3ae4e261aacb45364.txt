@@ -31,6 +31,7 @@ Commands:
   bundle exec herb format [patterns]          Format templates (delegates to @herb-tools/formatter)
   bundle exec herb highlight [file]           Syntax highlight templates (delegates to @herb-tools/highlighter)
   bundle exec herb print [file]               Print AST (delegates to @herb-tools/printer)
+  bundle exec herb convert [files]            Convert templates between Slim and HTML+ERB (delegates to @herb-tools/printer)
   bundle exec herb lsp                        Start the language server (delegates to @herb-tools/language-server)
 
 stdin:

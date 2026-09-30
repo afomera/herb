@@ -118,6 +118,7 @@ class Herb::CLI
         bundle exec herb format [patterns]          Format templates (delegates to @herb-tools/formatter)
         bundle exec herb highlight [file]           Syntax highlight templates (delegates to @herb-tools/highlighter)
         bundle exec herb print [file]               Print AST (delegates to @herb-tools/printer)
+        bundle exec herb convert [files]            Convert templates between Slim and HTML+ERB (delegates to @herb-tools/printer)
         bundle exec herb lsp                        Start the language server (delegates to @herb-tools/language-server)
 
       stdin:
@@ -224,6 +225,8 @@ class Herb::CLI
                   run_node_tool("herb-format", "@herb-tools/formatter")
                 when "print"
                   run_node_tool("herb-print", "@herb-tools/printer")
+                when "convert"
+                  run_node_tool("herb-convert", "@herb-tools/printer")
                 when "highlight"
                   run_node_tool("herb-highlight", "@herb-tools/highlighter")
                 when "lsp"
