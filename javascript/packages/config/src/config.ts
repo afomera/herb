@@ -5,9 +5,9 @@ import configTemplate from "./config-template.yml"
 import defaultsYaml from "../../../../lib/herb/defaults.yml"
 
 import { stringify, parse, parseDocument, isMap, isScalar, visit } from "yaml"
-import { semverGreaterThan } from "@herb-tools/core"
+import { semverGreaterThan, resolveSlimTemplateOptions } from "@herb-tools/core"
 
-import type { ParseOptions } from "@herb-tools/core"
+import type { ParseOptions, SlimTemplateOptions } from "@herb-tools/core"
 import { promises as fs, accessSync, readFileSync, readdirSync, statSync } from "fs"
 import { fromZodError } from "zod-validation-error"
 import { deepMerge } from "./merge.js"
@@ -96,6 +96,8 @@ export type ParserConfig = {
   erb_openers?: string[]
 }
 
+export type SlimConfig = SlimTemplateOptions
+
 import { resolveSeverity, ALL_RULES_KEY } from "./config-schema.js"
 
 import type { SeverityConfig, LinterMode } from "./config-schema.js"
@@ -144,6 +146,7 @@ export type HerbConfigOptions = {
   template_engine?: TemplateEngine
   files?: FilesConfig
   parser?: ParserConfig
+  slim?: SlimConfig
   engine?: EngineConfig
   linter?: LinterConfig
   formatter?: FormatterConfig
@@ -239,6 +242,7 @@ export class Config {
     return {
       files: this.config.files,
       parser: this.config.parser,
+      slim: this.config.slim,
       linter: this.config.linter,
       formatter: this.config.formatter
     }
@@ -256,6 +260,14 @@ export class Config {
     const erbOpeners = this.config.parser?.erb_openers
 
     return erbOpeners ? { erb_openers: erbOpeners } : {}
+  }
+
+  /**
+   * The project's Slim settings with Slim's defaults filled in. A configured `shortcuts` or
+   * `merge_attrs` map replaces the default one, the way the Slim gem's options do.
+   */
+  get slim(): Required<SlimTemplateOptions> {
+    return resolveSlimTemplateOptions(this.config.slim)
   }
 
   get linter() {

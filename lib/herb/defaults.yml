@@ -9,6 +9,7 @@ files:
     - "**/*.html+*.erb"
     - "**/*.rhtml"
     - "**/*.turbo_stream.erb"
+    - "**/*.slim"
 
   exclude:
     - "coverage/**/*"

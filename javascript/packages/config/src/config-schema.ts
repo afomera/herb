@@ -75,6 +75,18 @@ export const ParserConfigSchema = z.object({
   erb_openers: z.array(z.string().min(1)).optional().describe("ERB tag openers recognized in addition to the built-in ones, written without the leading `<%` (e.g., ['graphql'] makes `<%graphql ... %>` a tag whose body is not Ruby)"),
 }).strict().optional()
 
+export const SlimShortcutSchema = z.object({
+  attr: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]).optional().describe("Attribute (or attributes) the shortcut's name is written into (e.g., 'data-testid')"),
+  tag: z.string().min(1).optional().describe("Tag the shortcut creates when it starts a line (e.g., 'input')"),
+}).strict().refine(shortcut => shortcut.attr !== undefined || shortcut.tag !== undefined, {
+  message: "A Slim shortcut needs an `attr`, a `tag`, or both",
+})
+
+export const SlimConfigSchema = z.object({
+  shortcuts: z.record(z.string().min(1), SlimShortcutSchema).optional().describe("Slim shortcuts, like the Slim gem's `:shortcut` option. Replaces the default (`#` for id, `.` for class), so list those too to keep them (e.g., { '#': { attr: 'id' }, '.': { attr: 'class' }, '~': { attr: 'data-testid' } })"),
+  merge_attrs: z.record(z.string().min(1), z.string()).optional().describe("Attributes whose repeated values are joined, and the separator to join them with, like the Slim gem's `:merge_attrs` option. Replaces the default ({ class: ' ' })"),
+}).strict().optional()
+
 export const EngineConfigSchema = z.record(z.string(), z.unknown()).nullish()
 
 export const HerbConfigSchema = z.object({
@@ -83,6 +95,7 @@ export const HerbConfigSchema = z.object({
   template_engine: TemplateEngineSchema,
   files: FilesConfigSchema.describe("Top-level file configuration"),
   parser: ParserConfigSchema.describe("Parser configuration shared by every Herb tool"),
+  slim: SlimConfigSchema.describe("Slim settings, matching how the Slim gem is configured, used when parsing `.slim` templates"),
   engine: EngineConfigSchema.describe("Engine configuration"),
   linter: LinterConfigSchema,
   formatter: FormatterConfigSchema,
@@ -92,6 +105,7 @@ export type HerbConfigSchemaType = z.infer<typeof HerbConfigSchema>
 export type RuleConfigSchemaType = z.infer<typeof RuleConfigSchema>
 export type FilesConfigSchemaType = z.infer<typeof FilesConfigSchema>
 export type ParserConfigSchemaType = z.infer<typeof ParserConfigSchema>
+export type SlimConfigSchemaType = z.infer<typeof SlimConfigSchema>
 export type SeveritySchemaType = z.infer<typeof SeveritySchema>
 
 export type SeverityConfig = DiagnosticSeverity | { editor: DiagnosticSeverity; cli: DiagnosticSeverity }

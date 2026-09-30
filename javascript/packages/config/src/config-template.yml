@@ -38,6 +38,19 @@ version: 0.11.0
 #     nesting: true        # default: true
 #     accessibility: true  # default: true
 
+# # Slim settings, matching how the Slim gem is configured (used for .slim files)
+# slim:
+#   # Replaces Slim's default shortcuts, so keep "#" and "." if you use them
+#   shortcuts:
+#     "#": { attr: id }
+#     ".": { attr: class }
+#     "~": { attr: data-testid }
+#
+#   # Attributes whose repeated values are joined (default: { class: " " })
+#   merge_attrs:
+#     class: " "
+#     data-controller: " "
+
 linter:
   enabled: true
 

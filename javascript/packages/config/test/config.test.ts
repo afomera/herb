@@ -1201,7 +1201,8 @@ describe("@herb-tools/config", () => {
         '**/*.html',
         '**/*.html+*.erb',
         '**/*.rhtml',
-        '**/*.turbo_stream.erb'
+        '**/*.turbo_stream.erb',
+        '**/*.slim'
       ])
     })
 
@@ -1224,6 +1225,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml.erb'
       ])
 
@@ -1257,6 +1259,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml'
       ])
 
@@ -1315,6 +1318,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml',
         '**/*.custom.erb'
       ])
@@ -1349,6 +1353,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml.erb'
       ])
 
@@ -1380,6 +1385,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.custom.erb'
       ])
     })
@@ -1394,7 +1400,8 @@ describe("@herb-tools/config", () => {
         '**/*.html',
         '**/*.html+*.erb',
         '**/*.rhtml',
-        '**/*.turbo_stream.erb'
+        '**/*.turbo_stream.erb',
+        '**/*.slim'
       ])
     })
 
@@ -1416,6 +1423,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.custom.erb'
       ])
 
@@ -1450,6 +1458,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml',
         '**/*.custom.erb'
       ])
@@ -1462,6 +1471,7 @@ describe("@herb-tools/config", () => {
         '**/*.html+*.erb',
         '**/*.rhtml',
         '**/*.turbo_stream.erb',
+        '**/*.slim',
         '**/*.xml'
       ])
     })
@@ -1475,6 +1485,19 @@ describe("@herb-tools/config", () => {
       const files = await config.findFilesForTool("linter", testDir)
 
       expect(files.sort()).toEqual([file1, file2].sort())
+    })
+
+    test("findFilesForTool finds Slim templates by default", async () => {
+      const erb = createTestFile(testDir, "app/views/home/index.html.erb")
+      const slim = createTestFile(testDir, "app/views/users/show.html.slim")
+      const plainSlim = createTestFile(testDir, "app/views/users/_card.slim")
+      createTestFile(testDir, "vendor/bundle/gem/file.html.slim")
+
+      const config = Config.fromObject({}, { projectPath: testDir })
+
+      expect((await config.findFilesForTool("linter", testDir)).sort()).toEqual([erb, slim, plainSlim].sort())
+      expect(config.isLinterEnabledForPath("app/views/users/show.html.slim")).toBe(true)
+      expect(Config.getDefaultFilePatterns()).toContain("**/*.slim")
     })
 
     test("findFilesForTool excludes patterns", async () => {
@@ -1741,6 +1764,70 @@ describe("@herb-tools/config", () => {
       await expect(
         Config.load(testDir, { version: "0.11.0", silent: true })
       ).rejects.toThrow(/at "engine"/)
+    })
+  })
+
+  describe("slim configuration", () => {
+    test("defaults to Slim's own shortcuts and merge_attrs", () => {
+      const config = Config.fromObject({}, { projectPath: testDir })
+
+      expect(config.slim).toEqual({
+        shortcuts: { "#": { attr: "id" }, ".": { attr: "class" } },
+        merge_attrs: { class: " " },
+      })
+    })
+
+    test("loads custom shortcuts and merge_attrs, replacing the defaults", async () => {
+      createTestFile(testDir, ".herb.yml", dedent`
+        version: 0.11.0
+
+        slim:
+          shortcuts:
+            "#": { attr: id }
+            "~": { attr: data-testid }
+            "&": { tag: input, attr: type }
+            "@": { attr: [data-role, aria-label] }
+          merge_attrs:
+            class: " "
+            data-controller: " "
+      `)
+
+      const config = await Config.load(testDir, { version: "0.11.0", silent: true })
+
+      expect(config.slim.shortcuts).toEqual({
+        "#": { attr: "id" },
+        "~": { attr: "data-testid" },
+        "&": { tag: "input", attr: "type" },
+        "@": { attr: ["data-role", "aria-label"] },
+      })
+
+      expect(config.slim.merge_attrs).toEqual({ class: " ", "data-controller": " " })
+      expect(config.options.slim?.shortcuts?.["~"]).toEqual({ attr: "data-testid" })
+    })
+
+    test("keeps the default merge_attrs when only shortcuts are configured", async () => {
+      createTestFile(testDir, ".herb.yml", "version: 0.11.0\n\nslim:\n  shortcuts:\n    \"~\": { attr: data-testid }\n")
+
+      const config = await Config.load(testDir, { version: "0.11.0", silent: true })
+
+      expect(config.slim.shortcuts).toEqual({ "~": { attr: "data-testid" } })
+      expect(config.slim.merge_attrs).toEqual({ class: " " })
+    })
+
+    test("rejects a shortcut without an attr or a tag", async () => {
+      createTestFile(testDir, ".herb.yml", "version: 0.11.0\n\nslim:\n  shortcuts:\n    \"~\": {}\n")
+
+      await expect(
+        Config.load(testDir, { version: "0.11.0", silent: true })
+      ).rejects.toThrow(/attr/)
+    })
+
+    test("rejects unknown slim options", async () => {
+      createTestFile(testDir, ".herb.yml", "version: 0.11.0\n\nslim:\n  pretty: true\n")
+
+      await expect(
+        Config.load(testDir, { version: "0.11.0", silent: true })
+      ).rejects.toThrow(/slim/)
     })
   })
 
