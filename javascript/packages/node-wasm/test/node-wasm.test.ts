@@ -225,4 +225,20 @@ describe("@herb-tools/node-wasm", () => {
     expect(whenNode.then_keyword?.end.line).toBe(2)
     expect(whenNode.then_keyword?.end.column).toBe(19)
   })
+  test("parse() passes the Slim options through and reports them", async () => {
+    const result = Herb.parse("div.card~main Hello", {
+      language: "slim",
+      exact_semantics: true,
+      slim_shortcuts: { "~": "data-testid", ".": "class" },
+      slim_merge_attrs: { class: " ", "data-controller": " " },
+    })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.options.exact_semantics).toBe(true)
+    expect(result.options.slim_shortcuts).toEqual({ "~": "data-testid", ".": "class" })
+    expect(result.options.slim_merge_attrs).toEqual({ class: " ", "data-controller": " " })
+
+    const attributes = (result.value.children[0] as any).open_tag.children.filter((child: any) => child.type === "AST_HTML_ATTRIBUTE_NODE")
+    expect(attributes.map((attribute: any) => attribute.name.children[0].content)).toEqual(["class", "data-testid"])
+  })
 })
