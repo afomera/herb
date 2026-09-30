@@ -29,6 +29,20 @@ module Herb
     #
     #     ActionView::Template.register_template_handler :slim, handler
     #
+    # `only:` gets the template, and the source too when it takes two arguments. With
+    # `fallback_on_errors: true`, a template Herb can't parse yet is compiled by the fallback instead,
+    # and logged once:
+    #
+    #     handler = Herb::ActionView::SlimHandler.new(
+    #       fallback: Slim::RailsTemplate.new,
+    #       fallback_on_errors: true
+    #     )
+    #
+    # The template can be an `ActionView::Template` or a template-like object from another library.
+    # ViewComponent passes a struct with `identifier`, `short_identifier`, `format` and `type` (and
+    # no `source`, which it passes as the second argument), whose `identifier` is the component's
+    # template file, or its `.rb` file for an inline template.
+    #
     # The project's Slim settings (`slim:` in `.herb.yml`) are read from `Herb.configuration`.
     class SlimHandler
       # Adds `Herb::Engine::DebugVisitor` to templates under the project path, which is what the
@@ -42,12 +56,18 @@ module Herb
       # Where the templates the overlay can open live. Defaults to `Rails.root`.
       attr_writer project_path: String?
 
+      # Where `fallback_on_errors:` logs the templates it hands to the fallback. Defaults to `Rails.logger`.
+      attr_writer logger: untyped
+
       # The engine class to compile with. Defaults to Rails' `ActionView::Template::Handlers::ERB::Herb`
       # when Rails ships one (8.2), and to `Herb::ActionView::OutputBufferEngine` otherwise.
       attr_writer engine_class: Class?
 
       # : () -> String?
       def self.project_path: () -> String?
+
+      # : () -> untyped
+      def self.logger: () -> untyped
 
       # : () -> Class
       def self.engine_class: () -> Class
@@ -61,14 +81,43 @@ module Herb
 
       def self.reset!: () -> untyped
 
-      # : (?only: (^(untyped) -> boolish)?, ?fallback: untyped, ?engine_class: Class?, ?visitors: untyped) -> void
-      def initialize: (?only: (^(untyped) -> boolish)?, ?fallback: untyped, ?engine_class: Class?, ?visitors: untyped) -> void
+      # The errors `fallback_on_errors:` hands a template to the fallback for: Herb couldn't parse it,
+      # or compiled it to Ruby that doesn't parse. Validator errors still raise.
+      FALLBACK_ERRORS: untyped
+
+      POSITIONAL_PARAMETERS: Array[Symbol]
+
+      # : (?only: untyped, ?fallback: untyped, ?fallback_on_errors: bool, ?engine_class: Class?, ?visitors: untyped) -> void
+      def initialize: (?only: untyped, ?fallback: untyped, ?fallback_on_errors: bool, ?engine_class: Class?, ?visitors: untyped) -> void
 
       def call: (untyped template, ?untyped source) -> untyped
 
       def supports_streaming?: () -> untyped
 
       private
+
+      # : (untyped, String) -> String
+      def compile: (untyped, String) -> String
+
+      # The source Action View passes as the second argument, or the template's own. ViewComponent's
+      # template struct has no `source`.
+      # : (untyped, String?) -> String
+      def source_for: (untyped, String?) -> String
+
+      # : (untyped, String) -> bool
+      def herb?: (untyped, String) -> bool
+
+      # : (untyped) -> bool
+      def takes_source?: (untyped) -> bool
+
+      # : (untyped, Exception) -> void
+      def log_fallback: (untyped, Exception) -> void
+
+      # : (untyped, Symbol) -> untyped
+      def template_attribute: (untyped, Symbol) -> untyped
+
+      # : (untyped) -> String
+      def template_name: (untyped) -> String
 
       # : (untyped) -> Hash[Symbol, untyped]
       def engine_options: (untyped) -> Hash[Symbol, untyped]

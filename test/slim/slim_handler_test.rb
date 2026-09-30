@@ -14,6 +14,32 @@ module Slim
       end
     end
 
+    # The template objects ViewComponent passes to a handler: 4.x and 3.x pass the source as the second
+    # argument, next to a struct without `source`. 3.x passes `DataNoSource` to one-argument handlers.
+    ComponentTemplate = Struct.new(:format, :identifier, :short_identifier, :type)
+    KeywordComponentTemplate = Struct.new(:format, :identifier, :short_identifier, :type, keyword_init: true)
+    ComponentTemplateWithSource = Struct.new(:source, :identifier, :type, keyword_init: true)
+
+    FallbackHandler = Struct.new(:calls) do
+      def call(template, source)
+        calls << [template, source]
+
+        "@output_buffer.safe_append='fallback'.freeze;@output_buffer"
+      end
+    end
+
+    class Logger
+      attr_reader :messages
+
+      def initialize
+        @messages = []
+      end
+
+      def info(message)
+        @messages << message
+      end
+    end
+
     before do
       skip SlimTestSupport.render_dependency_error if SlimTestSupport.render_dependency_error
 
@@ -119,12 +145,151 @@ module Slim
       ActionView::Base.annotate_rendered_view_with_filenames = false
     end
 
+    test "compiles ViewComponent's template struct, which has no source" do
+      template = ComponentTemplate.new(:html, "/app/components/card_component.html.slim", "app/components/card_component.html.slim", ActionView::Template::Types[:html])
+      source = ".card = @title\n"
+
+      assert_equal %(<div class="card">&lt;b&gt;Hi&lt;/b&gt;</div>), render_component(Herb::ActionView::SlimHandler, template, source, title: "<b>Hi</b>")
+      assert_equal render_slim(".card = title\n", { title: "<b>Hi</b>" }), render_component(Herb::ActionView::SlimHandler, template, source, title: "<b>Hi</b>")
+    end
+
+    test "compiles ViewComponent 3's keyword struct and inline templates" do
+      template = KeywordComponentTemplate.new(format: :html, identifier: "/app/components/inline_component.rb", short_identifier: "app/components/inline_component.rb", type: ActionView::Template::Types[:html])
+
+      assert_equal "<p>Hi</p>", render_component(Herb::ActionView::SlimHandler, template, "p = @title\n", title: "Hi")
+    end
+
+    test "reads the source from a template-like object when none is passed" do
+      template = ComponentTemplateWithSource.new(source: "p = @title\n", identifier: "/app/components/card_component.html.slim", type: nil)
+
+      assert_equal "<p>Hi</p>", render_component(Herb::ActionView::SlimHandler, template, nil, title: "Hi")
+    end
+
+    test "a template without a source needs one passed" do
+      template = ComponentTemplate.new(:html, "/app/components/card_component.html.slim", nil, nil)
+
+      error = assert_raises(ArgumentError) { Herb::ActionView::SlimHandler.call(template) }
+
+      assert_match(/card_component\.html\.slim has no source/, error.message)
+    end
+
+    test "works with a template that has only an identifier, and with debug on" do
+      Herb::ActionView::SlimHandler.debug = true
+      Herb::ActionView::SlimHandler.project_path = "/app"
+      ActionView::Base.annotate_rendered_view_with_filenames = true
+
+      template = Struct.new(:identifier).new("/app/components/card_component.html.slim")
+      html = render_component(Herb::ActionView::SlimHandler, template, ".card Hi\n")
+
+      assert_equal "components/card_component.html.slim", Nokogiri::HTML5.fragment(html).at_css(".card")["data-herb-debug-file-relative-path"]
+
+      bare = render_component(Herb::ActionView::SlimHandler, Object.new, ".card Hi\n")
+
+      assert_equal %(<div class="card">Hi</div>), bare
+    ensure
+      ActionView::Base.annotate_rendered_view_with_filenames = false
+    end
+
+    test "debug markers on a component's template" do
+      Herb::ActionView::SlimHandler.debug = true
+      Herb::ActionView::SlimHandler.project_path = "/app"
+
+      template = ComponentTemplate.new(:html, "/app/components/card_component.html.slim", "app/components/card_component.html.slim", ActionView::Template::Types[:html])
+      card = Nokogiri::HTML5.fragment(render_component(Herb::ActionView::SlimHandler, template, ".card Hi\n")).at_css(".card")
+
+      assert_equal "/app/components/card_component.html.slim", card["data-herb-debug-file-full-path"]
+    end
+
+    test "only: and the fallback get ViewComponent's struct and the source" do
+      fallback = FallbackHandler.new([])
+      handler = Herb::ActionView::SlimHandler.new(only: ->(template) { template.identifier.include?("/admin/") }, fallback: fallback)
+
+      admin = ComponentTemplate.new(:html, "/app/components/admin/card_component.html.slim", nil, nil)
+      other = ComponentTemplate.new(:html, "/app/components/card_component.html.slim", nil, nil)
+
+      assert_equal "<p>Hi</p>", render_component(handler, admin, "p Hi\n")
+      assert_equal "fallback", render_component(handler, other, "p Hi\n")
+      assert_equal [[other, "p Hi\n"]], fallback.calls
+    end
+
+    test "only: gets the source when it takes two arguments" do
+      seen = []
+      handler = Herb::ActionView::SlimHandler.new(
+        only: lambda { |template, source|
+          seen << [template.identifier, source]
+          !source.include?("legacy")
+        },
+        fallback: FallbackHandler.new([])
+      )
+
+      template = ComponentTemplate.new(:html, "/app/components/card_component.html.slim", nil, nil)
+
+      assert_equal "<p>Hi</p>", render_component(handler, template, "p Hi\n")
+      assert_equal "fallback", render_component(handler, template, "p legacy\n")
+      assert_equal [["/app/components/card_component.html.slim", "p Hi\n"], ["/app/components/card_component.html.slim", "p legacy\n"]], seen
+    end
+
+    test "only: can be any callable" do
+      picker = Object.new
+      def picker.call(template, source = nil) = source.to_s.include?("herb") && template.identifier.end_with?(".slim")
+
+      handler = Herb::ActionView::SlimHandler.new(only: picker, fallback: FallbackHandler.new([]))
+
+      assert_equal "<p>herb</p>", render_herb_slim("p herb\n", identifier: "/app/views/show.html.slim", handler: handler)
+      assert_equal "fallback", render_herb_slim("p slim\n", identifier: "/app/views/show.html.slim", handler: handler)
+    end
+
+    test "fallback_on_errors: compiles what Herb can't parse with the fallback, and logs it once" do
+      logger = Logger.new
+      fallback = FallbackHandler.new([])
+      Herb::ActionView::SlimHandler.logger = logger
+      handler = Herb::ActionView::SlimHandler.new(fallback: fallback, fallback_on_errors: true)
+      source = "markdown:\n  # Hi\n"
+
+      assert_equal "<p>Hi</p>", render_herb_slim("p Hi\n", identifier: "/app/views/show.html.slim", handler: handler)
+      assert_equal "fallback", render_herb_slim(source, identifier: "/app/views/notes.html.slim", handler: handler)
+      assert_equal "fallback", render_herb_slim(source, identifier: "/app/views/notes.html.slim", handler: handler)
+
+      template = ComponentTemplate.new(:html, "/app/components/notes_component.rb", "app/components/notes_component.rb", nil)
+
+      assert_equal "fallback", render_component(handler, template, source)
+
+      assert_equal 3, fallback.calls.length
+      assert_equal 2, logger.messages.length
+      assert_match(%r{\A\[Herb\] /app/views/notes\.html\.slim is rendered by .*FallbackHandler, since Herb could not compile it: line 1:1: Unsupported embedded engine}, logger.messages.first)
+      assert_match(%r{app/components/notes_component\.rb is rendered by}, logger.messages.last)
+    end
+
+    test "without fallback_on_errors: a parse error raises" do
+      handler = Herb::ActionView::SlimHandler.new(only: ->(_) { true }, fallback: FallbackHandler.new([]))
+
+      assert_raises(Herb::Engine::ParseError) { handler.call(ComponentTemplate.new(:html, "/app/x.html.slim", nil, nil), "markdown:\n  # Hi\n") }
+    end
+
+    test "fallback_on_errors: needs a fallback" do
+      assert_raises(ArgumentError) { Herb::ActionView::SlimHandler.new(fallback_on_errors: true) }
+    end
+
     test "uses a configured engine class" do
       engine_class = Class.new(Herb::ActionView::OutputBufferEngine)
       Herb::ActionView::SlimHandler.engine_class = engine_class
 
       assert_equal engine_class, Herb::ActionView::SlimHandler.engine_class
       assert_equal "<p>Hi</p>", render_herb_slim("p Hi\n")
+    end
+
+    private
+
+    # Compiles like ViewComponent does, into a method on the component (here a view), and calls it.
+    def render_component(handler, template, source, assigns = {})
+      view = build_view
+      assigns.each { |name, value| view.instance_variable_set(:"@#{name}", value) }
+
+      src = source.nil? ? handler.call(template) : handler.call(template, source)
+      view.singleton_class.class_eval("def __render_component\n#{src}\nend", __FILE__, __LINE__)
+      view.instance_variable_set(:@output_buffer, ActionView::OutputBuffer.new)
+
+      view.__render_component.to_s
     end
   end
 end
