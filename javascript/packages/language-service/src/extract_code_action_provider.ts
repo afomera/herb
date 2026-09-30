@@ -8,6 +8,7 @@ import type { FrameworkOptions } from "./types.js"
 import { ParserService } from "./parser_service"
 import type { ExtractedLocal } from "./extract_partial_analyzer"
 import { pathFromUri, uriFromPath } from "./uri"
+import { isERBDocument } from "./template_language"
 
 import type { TextDocument } from "vscode-languageserver-textdocument"
 
@@ -67,6 +68,8 @@ export class ExtractCodeActionProvider {
   }
 
   getCodeActions(document: TextDocument, requestedRange: Range, options?: FrameworkOptions): CodeAction[] {
+    if (!isERBDocument(document)) return []
+
     if (options?.framework !== "actionview") return []
     if (!this.capabilities.supportsResourceCreation) return []
     if (!this.isTemplate(document.uri)) return []
@@ -106,6 +109,8 @@ export class ExtractCodeActionProvider {
   }
 
   extractToPartial(document: TextDocument, requestedRange: Range, name: string): ExtractToPartialResult {
+    if (!isERBDocument(document)) return { error: "Extracting a partial is only supported in ERB templates." }
+
     const analysis = this.analyzer.analyze(document, requestedRange)
 
     if (!analysis) {

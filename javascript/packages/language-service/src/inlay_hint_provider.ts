@@ -7,6 +7,7 @@ import { elementSelector, erbLabel, defaultNodeLabelOptions } from "./node_label
 
 import type { NodeLabelOptions } from "./node_labels"
 import { lspPosition } from "./range_utils"
+import { isERBDocument } from "./template_language"
 
 import type {
   ERBEndNode,
@@ -41,6 +42,9 @@ export class InlayHintProvider {
   }
 
   getInlayHints(textDocument: TextDocument, options: InlayHintOptions = {}): InlayHint[] {
+    // The hints label close tags and `end`s, which a Slim template doesn't have.
+    if (!isERBDocument(textDocument)) return []
+
     const parseResult = this.parserService.parseDocument(textDocument)
     const collector = new InlayHintCollector(options)
 

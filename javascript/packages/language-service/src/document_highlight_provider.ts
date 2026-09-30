@@ -26,6 +26,10 @@ import type {
   ERBRescueNode,
 } from "@herb-tools/core"
 
+function isEmptyRange(range: Range): boolean {
+  return range.start.line === range.end.line && range.start.character === range.end.character
+}
+
 export class DocumentHighlightCollector extends Visitor {
   public groups: Range[][] = []
   private processedIfNodes: Set<ERBIfNode> = new Set()
@@ -286,7 +290,8 @@ export class DocumentHighlightProvider {
     }
 
     if (bestGroup) {
-      return bestGroup.map(range => DocumentHighlight.create(range, DocumentHighlightKind.Text))
+      // A Slim template's close tags are synthesized with an empty range, so there's nothing to highlight for them.
+      return bestGroup.filter(range => !isEmptyRange(range)).map(range => DocumentHighlight.create(range, DocumentHighlightKind.Text))
     }
 
     return []

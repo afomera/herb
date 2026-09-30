@@ -6,6 +6,7 @@ import type { Config, Framework } from "@herb-tools/config"
 export type ProjectConfig = {
   framework?: Config["framework"]
   parserOptions?: Config["parserOptions"]
+  slim?: Config["slim"]
 }
 
 export interface FrameworkOptions {

@@ -6,6 +6,7 @@ import { LineContextCollector } from "./line_context_collector"
 
 import { lspLine } from "./range_utils"
 import { determineStrategy, commentLineContent, uncommentLineContent, carriesCommentedTagPrefix } from "./comment_ast_utils"
+import { isERBDocument } from "./template_language"
 
 import { isERBCommentNode, isInlineRubyCommentNode } from "@herb-tools/core"
 
@@ -20,6 +21,8 @@ export class CommentProvider {
   }
 
   toggleLineComment(document: TextDocument, range: Range): TextEdit[] {
+    if (!isERBDocument(document)) return []
+
     const parseResult = this.parserService.parseDocument(document)
     const collector = new LineContextCollector()
 
@@ -92,6 +95,8 @@ export class CommentProvider {
   }
 
   toggleBlockComment(document: TextDocument, range: Range): TextEdit[] {
+    if (!isERBDocument(document)) return []
+
     const parseResult = this.parserService.parseDocument(document)
     const collector = new LineContextCollector()
 

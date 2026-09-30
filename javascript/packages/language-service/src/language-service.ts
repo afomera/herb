@@ -5,7 +5,7 @@ import { buildHTMLDocument } from "./herb-html-document.js"
 import { getLanguageService as getUpstreamLanguageService } from "vscode-html-languageservice"
 import { herbHTMLDataProvider } from "./herb_html_data_provider"
 
-import { TOKEN_LIST_ATTRIBUTES, getHelper } from "@herb-tools/core"
+import { TOKEN_LIST_ATTRIBUTES, getHelper, languageForDocument } from "@herb-tools/core"
 
 import type { ParseOptions } from "@herb-tools/core"
 import type { LanguageServiceOptions, FrameworkOptions } from "./types.js"
@@ -47,7 +47,7 @@ export function getLanguageService(options?: LanguageServiceOptions): LanguageSe
       const source = document.getText()
 
       try {
-        const result = herb.parse(source, herbParseOptions)
+        const result = herb.parse(source, { ...herbParseOptions, language: languageForDocument(document) })
         return buildHTMLDocument(result.value, source, tokenListAttributes)
       } catch {
         return upstream.parseHTMLDocument(document)

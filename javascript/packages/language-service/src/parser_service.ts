@@ -1,10 +1,10 @@
 import { TextDocument } from "vscode-languageserver-textdocument"
 import { lspRangeFromLocation } from "./range_utils"
 import { Diagnostic, DiagnosticSeverity } from "vscode-languageserver-types"
-import { Visitor, commentedERBTagPrefixes } from "@herb-tools/core"
+import { Visitor, commentedERBTagPrefixes, languageForDocument, languageForPath, parserOptionsForLanguage } from "@herb-tools/core"
 
 import type { ProjectConfig } from "./types.js"
-import type { HerbBackend, Node, HerbError, DocumentNode, ParseResult, ParseOptions } from "@herb-tools/core"
+import type { HerbBackend, Node, HerbError, DocumentNode, ParseResult, ParseOptions, TemplateLanguage } from "@herb-tools/core"
 
 class ErrorVisitor extends Visitor {
   private readonly source = "Herb Parser "
@@ -101,15 +101,25 @@ export class ParserService {
     return this.resolveConfig?.(uri) ?? this.config
   }
 
-  private parserOptionsFor(uri?: string): ParseOptions {
-    return this.configFor(uri)?.parserOptions ?? {}
+  /**
+   * The parser options for a document: the project's, plus the template language, which comes
+   * from the URI's extension unless given, so a `.slim` file is parsed as Slim (with the project's
+   * Slim settings) and never as ERB.
+   */
+  private parserOptionsFor(uri?: string, language?: TemplateLanguage): ParseOptions {
+    const config = this.configFor(uri)
+
+    if (uri === undefined && language === undefined) return config?.parserOptions ?? {}
+
+    return parserOptionsForLanguage(language ?? languageForPath(uri), config)
   }
 
   parseDocument(textDocument: TextDocument): ParseServiceResult {
     const content = textDocument.getText()
-    const result = this.parseContent(content, undefined, textDocument.uri)
+    const options = this.parserOptionsFor(textDocument.uri, languageForDocument(textDocument))
+    const result = this.parseContent(content, options, textDocument.uri)
 
-    const diagnostics = this.#remember(`diagnostics\u0000${this.#cacheKey(content, undefined, textDocument.uri)}`, () => {
+    const diagnostics = this.#remember(`diagnostics\u0000${this.#cacheKey(content, options, textDocument.uri)}`, () => {
       const errorVisitor = new ErrorVisitor()
       result.visit(errorVisitor)
 

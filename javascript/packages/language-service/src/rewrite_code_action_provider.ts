@@ -7,6 +7,7 @@ import { ActionViewTagHelperToHTMLRewriter, HTMLToActionViewTagHelperRewriter, c
 import { isERBOpenTagNode, isHTMLOpenTagNode, HELPER_BY_SOURCE, findPreferredHelperForTag } from "@herb-tools/core"
 import { ParserService } from "./parser_service"
 import { nodeToRange } from "./range_utils"
+import { isERBDocument } from "./template_language"
 
 import type { Node, HTMLElementNode } from "@herb-tools/core"
 import type { FrameworkOptions } from "./types.js"
@@ -51,6 +52,8 @@ export class RewriteCodeActionProvider {
   }
 
   getCodeActions(document: TextDocument, requestedRange: Range, options?: FrameworkOptions): CodeAction[] {
+    if (!isERBDocument(document)) return []
+
     if (options?.framework !== "actionview") return []
 
     const parseResult = this.parserService.parseContent(document.getText(), {

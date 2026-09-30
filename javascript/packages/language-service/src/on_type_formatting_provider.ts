@@ -1,4 +1,5 @@
 import { StringValue, TextEdit } from "vscode-languageserver-types"
+import { isERBDocument } from "./template_language"
 
 import type { FormattingOptions, Position, Range, SnippetTextEdit } from "vscode-languageserver-types"
 import type { TextDocument } from "vscode-languageserver-textdocument"
@@ -14,6 +15,8 @@ interface BlockCompletion {
 
 export class OnTypeFormattingProvider {
   getTextEdits(document: TextDocument, position: Position, character: string, options: FormattingOptions = DEFAULT_FORMATTING_OPTIONS): TextEdit[] {
+    if (!isERBDocument(document)) return []
+
     const completion = this.blockCompletionFor(document, position, character, options)
 
     if (!completion) return []
@@ -22,6 +25,8 @@ export class OnTypeFormattingProvider {
   }
 
   getSnippetTextEdits(document: TextDocument, position: Position, character: string, options: FormattingOptions = DEFAULT_FORMATTING_OPTIONS): SnippetTextEdit[] {
+    if (!isERBDocument(document)) return []
+
     const completion = this.blockCompletionFor(document, position, character, options)
 
     if (!completion) return []

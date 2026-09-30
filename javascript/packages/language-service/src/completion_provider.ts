@@ -6,6 +6,7 @@ import { Command, CompletionItem, CompletionItemKind, CompletionItemTag, Complet
 import { getBlockArgumentCompletions } from "./language-service"
 import { nodeToRange, isPositionInRange, rangeSize, lspPosition } from "./range_utils"
 import { collectHerbAttributes, collectStateDirectives } from "./herb_attribute_links"
+import { isERBDocument } from "./template_language"
 import { HERB_ATTRIBUTES } from "@herb-tools/client/directives"
 
 import type { DocumentNode } from "@herb-tools/core"
@@ -212,6 +213,8 @@ export class CompletionProvider {
   }
 
   getCompletions(document: TextDocument, position: Position): CompletionList | null {
+    if (!isERBDocument(document)) return null
+
     const parseResult = this.parserService.parseContent(document.getText(), {
       track_whitespace: true,
     }, document.uri)
