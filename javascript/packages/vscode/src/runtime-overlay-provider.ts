@@ -127,6 +127,8 @@ export class RuntimeOverlayProvider {
     return display === "replace" ? this.replaced : this.reported
   }
 
+  // Runtime values are captured by Herb's ERB engine, so only ERB templates have any to show.
+  // Slim templates are rendered by the Slim gem, which Herb doesn't instrument.
   private erb(editor: TextEditor): boolean {
     return editor.document.languageId === "erb" || editor.document.fileName.endsWith(".erb")
   }

@@ -212,7 +212,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.languages.registerCodeActionsProvider(
-      { language: 'erb', scheme: 'file' },
+      [{ language: 'erb', scheme: 'file' }, { language: 'slim', scheme: 'file' }],
       codeActionProvider
     )
   )

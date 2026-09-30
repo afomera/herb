@@ -40,11 +40,25 @@
   "activationEvents": [
     "onLanguage:erb",
     "onLanguage:html",
+    "onLanguage:slim",
     "onCommand:herb.analyzeProject",
     "onCommand:herb.reprocessFile"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "slim",
+        "aliases": [
+          "Slim",
+          "slim"
+        ],
+        "extensions": [
+          ".slim"
+        ],
+        "configuration": "./languages/slim-language-configuration.json"
+      }
+    ],
     "configurationDefaults": {
       "[erb]": {
         "editor.formatOnType": true,
@@ -382,6 +396,7 @@
   },
   "devDependencies": {
     "@herb-tools/config": "0.11.0",
+    "@herb-tools/core": "0.11.0",
     "@herb-tools/formatter": "0.11.0",
     "@herb-tools/language-server": "0.11.0",
     "@herb-tools/language-service": "0.11.0",

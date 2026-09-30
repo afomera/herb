@@ -185,6 +185,7 @@ export class Client {
       documentSelector: [
         { scheme: "file", language: "erb" },
         { scheme: "file", language: "html" },
+        { scheme: "file", language: "slim" },
         { scheme: "file", language: "yaml", pattern: `**/${Config.configPath}` },
         ...Config.misnamedConfigPaths.map(misnamedPath => ({
           scheme: "file", language: "yaml", pattern: `**/${misnamedPath}`

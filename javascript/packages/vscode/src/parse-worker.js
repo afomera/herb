@@ -3,6 +3,7 @@ const { Herb } = require('@herb-tools/node-wasm');
 const { Linter, loadCustomRules } = require('@herb-tools/linter/loader');
 const { Formatter } = require('@herb-tools/formatter');
 const { Config } = require('@herb-tools/config');
+const { parserOptionsForPath } = require('@herb-tools/core');
 
 (async () => {
   const file = process.argv[2];
@@ -55,7 +56,8 @@ const { Config } = require('@herb-tools/config');
     const parserOptions = projectConfig?.parserOptions ?? {};
 
     const content = fs.readFileSync(file, 'utf8');
-    const parseResult = Herb.parse(content, parserOptions);
+    // Chooses the template language from the extension, so a .slim file is parsed as Slim (with the project's Slim settings), never as ERB.
+    const parseResult = Herb.parse(content, parserOptionsForPath(file, projectConfig));
     const errors = parseResult.recursiveErrors();
     const parseErrors = errors.length;
     const timedOut = errors.some(error => error.type === 'TIMEOUT_ERROR');
@@ -68,6 +70,7 @@ const { Config } = require('@herb-tools/config');
       try {
         const config = Config.fromObject({
           parser: projectConfig?.parser,
+          slim: projectConfig?.options?.slim,
           linter: {
             enabled: true,
             rules: linterRules
@@ -106,7 +109,8 @@ const { Config } = require('@herb-tools/config');
           indentStyle: formatterIndentStyle,
           maxLineLength: formatterMaxLineLength
         }, parserOptions);
-        const formattedContent = formatter.format(content);
+        // The formatter leaves Slim templates untouched, so they never count as unformatted.
+        const formattedContent = formatter.format(content, {}, file);
 
         formatterIssues = formattedContent !== content;
 

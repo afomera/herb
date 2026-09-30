@@ -43,6 +43,12 @@ suite('outsideWorkspaceRoot', () => {
     assert.strictEqual(outsideWorkspaceRoot(erb(file, { scheme: 'git' }), [workspace], findsRoot(outside)), null)
   })
 
+  test('offers the project root for a Slim template outside every folder', () => {
+    const file = path.join(outside, 'app', 'views', 'a.html.slim')
+
+    assert.strictEqual(outsideWorkspaceRoot(erb(file, { languageId: 'slim' }), [workspace], findsRoot(outside)), outside)
+  })
+
   test('offers nothing for a language Herb does not handle', () => {
     const file = path.join(outside, 'a.rb')
 

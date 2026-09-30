@@ -6,7 +6,7 @@ import { Config } from "@herb-tools/config"
 
 const SETTING = "languageServerHerb.workspace.suggestAddingProjects"
 const FILE_SCHEME = "file"
-const LANGUAGES = new Set(["erb", "html"])
+const LANGUAGES = new Set(["erb", "html", "slim"])
 const ADD_FOLDER = "Add Folder to Workspace"
 const OPEN_WINDOW = "Open in New Window"
 const DONT_ASK = "Don't Ask Again"
