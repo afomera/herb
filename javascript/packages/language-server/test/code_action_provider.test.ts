@@ -185,4 +185,56 @@ describe("CodeActionProvider", () => {
     expect(fix).toBeDefined()
     expect(fix?.edit?.changes?.[URI][0].newText).toBe("<div>\n\t<span>Hello</span>\n</div>\n")
   })
+
+  describe("in Slim templates", () => {
+    const SLIM_URI = "file:///project/app/views/users/show.html.slim"
+
+    function slimDiagnostic(rule: string, line: number, code = rule): Diagnostic {
+      return {
+        range: Range.create(line, 2, line, 5),
+        message: `Offense from ${rule}.`,
+        severity: DiagnosticSeverity.Error,
+        source: "Herb Linter ",
+        code,
+        data: { rule }
+      }
+    }
+
+    it("disables a rule with a Slim comment on the line above", async () => {
+      const service = await createService()
+      const actions = service.createCodeActions(SLIM_URI, [slimDiagnostic("html-img-require-alt", 1)], "div\n  img src=\"a.png\"\n")
+      const action = actions.find(action => action.title === "Herb Linter: Disable `html-img-require-alt` for this line")
+
+      expect(action?.edit?.changes?.[SLIM_URI]).toEqual([
+        { range: Range.create(1, 0, 1, 0), newText: "  / herb:disable html-img-require-alt\n" }
+      ])
+    })
+
+    it("adds the rule to a Slim directive already above the line", async () => {
+      const service = await createService()
+      const source = "div\n  / herb:disable html-iframe-has-title\n  img src=\"a.png\"\n"
+      const actions = service.createCodeActions(SLIM_URI, [slimDiagnostic("html-img-require-alt", 2)], source)
+      const action = actions.find(action => action.title === "Herb Linter: Disable `html-img-require-alt` for this line")
+
+      expect(action?.edit?.changes?.[SLIM_URI]).toEqual([
+        { range: Range.create(1, 0, 1, 38), newText: "  / herb:disable html-iframe-has-title, html-img-require-alt" }
+      ])
+    })
+
+    it("never offers an autofix that writes ERB into a Slim file", async () => {
+      const service = await createService()
+      const document = TextDocument.create(SLIM_URI, "slim", 1, "DIV Hello\n")
+      const diagnostic = { ...slimDiagnostic("html-tag-name-lowercase", 0), range: Range.create(0, 0, 0, 3) }
+
+      const params = {
+        textDocument: { uri: SLIM_URI },
+        range: diagnostic.range,
+        context: { diagnostics: [diagnostic] }
+      } as CodeActionParams
+
+      const actions = await service.autofixCodeActions(params, document)
+
+      expect(actions.filter(action => action.title.includes("Fix"))).toEqual([])
+    })
+  })
 })

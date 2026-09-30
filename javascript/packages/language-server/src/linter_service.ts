@@ -14,6 +14,7 @@ import { rules, ruleDocumentationUrl } from "@herb-tools/linter"
 import { loadCustomRules as loadCustomRulesFromFs } from "@herb-tools/linter/loader"
 import { isConfigDocument, lintToDiagnosticSeverity, lintToDiagnosticTags } from "./utils"
 import { lspRangeFromLocation } from "@herb-tools/language-service"
+import { languageForDocument } from "@herb-tools/core"
 
 import type { RuleClass } from "@herb-tools/linter"
 import type { AncestorChain } from "@herb-tools/analysis"
@@ -226,6 +227,7 @@ export class LinterService {
 
     const lintResult = this.linter.lint(content, {
       fileName: this.index.relativePathFor(textDocument.uri) ?? textDocument.uri,
+      language: languageForDocument(textDocument),
       partials: this.index.partials,
       partialCallers: this.index?.callers,
       indentWidth: settings?.formatter?.indentWidth,

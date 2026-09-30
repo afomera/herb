@@ -7,7 +7,7 @@ import { Linter } from "@herb-tools/linter"
 import { Project } from "./project"
 import { OPEN_DOCUMENT_COMMAND } from "./commands"
 
-import { isValidFramework } from "@herb-tools/core"
+import { isValidFramework, languageForPath } from "@herb-tools/core"
 import { getFullDocumentRange, lspRangeFromLocation } from "@herb-tools/language-service"
 
 import type { Framework, HerbConfigOptions } from "@herb-tools/config"
@@ -104,6 +104,7 @@ export class CodeActionProvider {
     const codeActions: CodeAction[] = []
     const text = document.getText()
     const formatterContext = await this.formatterContextFor(document.uri)
+    // The file name also tells the linter the template language, so fixes that would write ERB are never offered in Slim.
     const autofixContext = { fileName: document.uri, ...formatterContext }
 
     const lintResult = this.linter.lint(text, {
@@ -209,6 +210,8 @@ export class CodeActionProvider {
   }
 
   private createDisableCommentEdit(uri: string, line: number, ruleName: string, documentText: string): WorkspaceEdit | null {
+    if (languageForPath(uri) === "slim") return this.createSlimDisableCommentEdit(uri, line, ruleName, documentText)
+
     const lines = documentText.split("\n")
 
     if (line >= lines.length) return null
@@ -260,6 +263,45 @@ export class CodeActionProvider {
     }
 
     return workspaceEdit
+  }
+
+  /**
+   * Slim has no trailing comments, so the directive goes on its own line above the offense, at
+   * the same indentation, where it applies to the next line. A directive already there gets the
+   * rule added to it instead.
+   */
+  private createSlimDisableCommentEdit(uri: string, line: number, ruleName: string, documentText: string): WorkspaceEdit | null {
+    const lines = documentText.split("\n")
+
+    if (line >= lines.length) return null
+
+    const previousLine = line > 0 ? lines[line - 1] : undefined
+    const existing = previousLine?.match(/^(\s*)\/\s*herb:disable\s+(.+?)\s*$/)
+
+    let textEdit: TextEdit
+
+    if (existing) {
+      const existingRules = existing[2].split(",").map(rule => rule.trim())
+
+      if (existingRules.includes("all") || existingRules.includes(ruleName)) return null
+
+      const rules = ruleName === "all" ? "all" : [...existingRules, ruleName].join(", ")
+
+      textEdit = TextEdit.replace(
+        Range.create(line - 1, 0, line - 1, previousLine!.length),
+        `${existing[1]}/ herb:disable ${rules}`
+      )
+    } else {
+      const indentation = lines[line].match(/^\s*/)?.[0] ?? ""
+
+      textEdit = TextEdit.insert({ line, character: 0 }, `${indentation}/ herb:disable ${ruleName}\n`)
+    }
+
+    return {
+      changes: {
+        [uri]: [textEdit]
+      }
+    }
   }
 
   private createDisableInConfigAction(diagnostic: Diagnostic, ruleName: string): CodeAction | null {

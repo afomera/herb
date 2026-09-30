@@ -55,6 +55,33 @@ describe("LinterService", () => {
   }
 
   describe("lintDocument", () => {
+    test("lints a Slim document as Slim, with diagnostics at Slim lines and columns", async () => {
+      const userSettings = new UserSettings(mockConnection, capabilities)
+      userSettings.getDocumentSettings = vi.fn().mockResolvedValue(null)
+
+      const linterService = new LinterService(mockConnection, userSettings, capabilities, projectFor(userSettings), index)
+      const textDocument = TextDocument.create("file:///app/views/users/show.html.slim", "slim", 1, ".card\n  - if admin\n    img src=\"avatar.png\"\n")
+
+      const result = await linterService.lintDocument(textDocument)
+      const diagnostic = result.diagnostics.find(diagnostic => diagnostic.code === "html-img-require-alt")
+
+      expect(diagnostic?.range).toEqual({ start: { line: 2, character: 4 }, end: { line: 2, character: 7 } })
+      expect(result.diagnostics.map(diagnostic => diagnostic.code)).not.toContain("erb-require-whitespace-inside-tags")
+      expect(result.diagnostics.map(diagnostic => diagnostic.code)).not.toContain("parser-no-errors")
+    })
+
+    test("lints an untitled document with the slim language id as Slim", async () => {
+      const userSettings = new UserSettings(mockConnection, capabilities)
+      userSettings.getDocumentSettings = vi.fn().mockResolvedValue(null)
+
+      const linterService = new LinterService(mockConnection, userSettings, capabilities, projectFor(userSettings), index)
+      const textDocument = TextDocument.create("untitled:Untitled-1", "slim", 1, "img src=\"avatar.png\"\n")
+
+      const result = await linterService.lintDocument(textDocument)
+
+      expect(result.diagnostics.find(diagnostic => diagnostic.code === "html-img-require-alt")?.range.start).toEqual({ line: 0, character: 0 })
+    })
+
     test("handles null settings gracefully", async () => {
       const userSettings = new UserSettings(mockConnection, capabilities)
       userSettings.getDocumentSettings = vi.fn().mockResolvedValue(null)

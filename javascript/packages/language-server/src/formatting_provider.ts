@@ -11,6 +11,7 @@ import { Config } from "@herb-tools/config"
 import { isConfigDocument } from "./utils"
 
 const OPEN_CONFIG_ACTION = 'Open .herb.yml'
+const UNSUPPORTED_LANGUAGE_MESSAGE = "Herb can't format Slim templates yet, so this file was left unchanged. The Herb formatter only formats HTML+ERB."
 
 export class FormattingProvider {
   private connection: Connection
@@ -22,6 +23,7 @@ export class FormattingProvider {
   private preRewriters: ASTRewriter[] = []
   private postRewriters: StringRewriter[] = []
   private failedRewriters: Map<string, string> = new Map()
+  private toldAboutUnsupportedLanguage = new Set<string>()
 
   constructor(connection: Connection, documents: Documents, project: Project, userSettings: UserSettings, capabilities: Capabilities) {
     this.connection = connection
@@ -191,6 +193,8 @@ export class FormattingProvider {
       return []
     }
 
+    if (this.skipsUnsupportedLanguage(document.uri)) return []
+
     const filePath = document.uri.replace(/^file:\/\//, '')
 
     if (!this.shouldFormatFile(filePath)) {
@@ -200,6 +204,24 @@ export class FormattingProvider {
     }
 
     return this.performFormatting({ textDocument: { uri: document.uri }, options: { tabSize: 2, insertSpaces: true } }, textOverride)
+  }
+
+  /**
+   * The formatter prints HTML+ERB, so a Slim template is never formatted: that would rewrite it
+   * as ERB. The first time a document is skipped the user is told why, since nothing happening on
+   * "Format Document" otherwise looks like a bug.
+   */
+  private skipsUnsupportedLanguage(uri: string): boolean {
+    if (Formatter.supportsPath(uri)) return false
+
+    this.connection.console.log(`[Formatting] Skipping: ${uri} is not an HTML+ERB template`)
+
+    if (!this.toldAboutUnsupportedLanguage.has(uri)) {
+      this.toldAboutUnsupportedLanguage.add(uri)
+      this.connection.window.showInformationMessage(UNSUPPORTED_LANGUAGE_MESSAGE)
+    }
+
+    return true
   }
 
   private shouldFormatFile(filePath: string): boolean {
@@ -302,6 +324,8 @@ export class FormattingProvider {
       return []
     }
 
+    if (this.skipsUnsupportedLanguage(params.textDocument.uri)) return []
+
     const filePath = params.textDocument.uri.replace(/^file:\/\//, '')
 
     if (!this.shouldFormatFile(filePath)) {
@@ -399,6 +423,8 @@ export class FormattingProvider {
     if (isConfigDocument(params.textDocument.uri)) {
       return []
     }
+
+    if (this.skipsUnsupportedLanguage(params.textDocument.uri)) return []
 
     const filePath = params.textDocument.uri.replace(/^file:\/\//, '')
 

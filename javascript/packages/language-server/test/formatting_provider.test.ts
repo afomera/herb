@@ -60,6 +60,44 @@ describe('FormattingProvider', () => {
     } as unknown as Config
   })
 
+  describe('Slim templates', () => {
+    const uri = 'file:///test/project/app/views/users/show.html.slim'
+    const source = 'div\n    p   Hello\n'
+
+    beforeEach(() => {
+      connection.window = { showInformationMessage: vi.fn() } as unknown as Connection['window']
+
+      vi.mocked(userSettings.getDocumentSettings).mockResolvedValue({ formatter: { enabled: true } } as any)
+      vi.mocked(documents.get).mockReturnValue(TextDocument.create(uri, 'slim', 1, source))
+    })
+
+    it('never formats a Slim template and says why once', async () => {
+      const params: DocumentFormattingParams = { textDocument: { uri }, options: { tabSize: 2, insertSpaces: true } }
+
+      expect(await formattingProvider.formatDocument(params)).toEqual([])
+      expect(await formattingProvider.formatDocument(params)).toEqual([])
+
+      expect(connection.window.showInformationMessage).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(connection.window.showInformationMessage).mock.calls[0][0]).toContain('Slim')
+    })
+
+    it('never range formats a Slim template', async () => {
+      const params: DocumentRangeFormattingParams = {
+        textDocument: { uri },
+        range: Range.create(0, 0, 2, 0),
+        options: { tabSize: 2, insertSpaces: true }
+      }
+
+      expect(await formattingProvider.formatRange(params)).toEqual([])
+    })
+
+    it('never formats a Slim template on save', async () => {
+      const document = TextDocument.create(uri, 'slim', 1, source)
+
+      expect(await formattingProvider.formatOnSave(document, 1)).toEqual([])
+    })
+  })
+
   describe('formatDocument', () => {
     const params: DocumentFormattingParams = {
       textDocument: { uri: 'file:///test/file.erb' },
