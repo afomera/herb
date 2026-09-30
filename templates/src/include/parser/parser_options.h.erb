@@ -6,6 +6,17 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+<%- parser_options.all_c_fields.select(&:enum?).each do |field| -%>
+
+typedef enum {
+<%- field.values.each do |value| -%>
+  <%= field.c_enum_constant(value) %>,
+<%- end -%>
+} <%= field.c_enum_type %>;
+
+bool <%= field.c_enum_from_string %>(const char* value, size_t length, <%= field.c_enum_type %>* result);
+const char* <%= field.c_enum_to_string %>(<%= field.c_enum_type %> value);
+<%- end -%>
 
 typedef struct PARSER_OPTIONS_STRUCT {
 <%- parser_options.all_c_fields.each do |field| -%>

@@ -1,9 +1,35 @@
 #include "include/parser/parser_options.h"
 
 #include <stddef.h>
+#include <string.h>
 
 <%- entries = parser_options.all_c_fields.flat_map { |field| field.string_array? ? [[field.c_name, "NULL"], [field.count_name, "0"]] : [[field.c_name, field.pointer? ? "NULL" : field.c_default.to_s]] } -%>
 <%- prefix = "const parser_options_T HERB_DEFAULT_PARSER_OPTIONS = { " -%>
 <%- entries.each_with_index do |(name, value), index| -%>
 <%= index.zero? ? prefix : " " * prefix.length %>.<%= name %> = <%= value %><%= index < entries.length - 1 ? "," : " };" %>
+<%- end -%>
+<%- parser_options.all_c_fields.select(&:enum?).each do |field| -%>
+
+bool <%= field.c_enum_from_string %>(const char* value, size_t length, <%= field.c_enum_type %>* result) {
+  if (value == NULL || result == NULL) { return false; }
+<%- field.values.each do |value| -%>
+
+  if (length == <%= value.bytesize %> && strncmp(value, "<%= value %>", <%= value.bytesize %>) == 0) {
+    *result = <%= field.c_enum_constant(value) %>;
+    return true;
+  }
+<%- end -%>
+
+  return false;
+}
+
+const char* <%= field.c_enum_to_string %>(<%= field.c_enum_type %> value) {
+  switch (value) {
+<%- field.values.each do |value| -%>
+    case <%= field.c_enum_constant(value) %>: return "<%= value %>";
+<%- end -%>
+  }
+
+  return "<%= field.values.first %>";
+}
 <%- end -%>

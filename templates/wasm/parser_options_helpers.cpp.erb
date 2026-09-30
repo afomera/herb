@@ -9,6 +9,12 @@ void herb_extract_parser_options(emscripten::val options, parser_options_T* pars
     parser_options-><%= field.c_name %> = options["<%= field.snake_case %>"].as<bool>();
   }
 
+<%- elsif field.enum? -%>
+  if (options.hasOwnProperty("<%= field.snake_case %>") && options["<%= field.snake_case %>"].isString()) {
+    std::string value = options["<%= field.snake_case %>"].as<std::string>();
+    <%= field.c_enum_from_string %>(value.c_str(), value.size(), &parser_options-><%= field.c_name %>);
+  }
+
 <%- elsif field.nullable? -%>
   if (options.hasOwnProperty("<%= field.snake_case %>")) {
     emscripten::val value = options["<%= field.snake_case %>"];

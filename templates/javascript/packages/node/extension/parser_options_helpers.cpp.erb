@@ -19,6 +19,16 @@ void herb_extract_parser_options(napi_env env, napi_value options, parser_option
       bool value = false;
       napi_get_value_bool(env, property, &value);
       parser_options-><%= field.c_name %> = value;
+<%- elsif field.enum? -%>
+      napi_valuetype property_type;
+      napi_typeof(env, property, &property_type);
+
+      if (property_type == napi_string) {
+        char buffer[64];
+        size_t length = 0;
+        napi_get_value_string_utf8(env, property, buffer, sizeof(buffer), &length);
+        <%= field.c_enum_from_string %>(buffer, length, &parser_options-><%= field.c_name %>);
+      }
 <%- elsif field.nullable? -%>
       napi_valuetype property_type;
       napi_typeof(env, property, &property_type);

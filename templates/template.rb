@@ -1193,7 +1193,11 @@ module Herb
         @only = config["only"]
         @skip = config.fetch("skip", [])
         @lex = config.fetch("lex", false)
+        @c_enum = config["c_enum"]
+        @values = config.fetch("values", [])
       end
+
+      attr_reader :values
 
       def for?(language)
         return @only.include?(language.to_s) if @only
@@ -1215,6 +1219,30 @@ module Herb
 
       def string_array?
         @type == "string_array"
+      end
+
+      def enum?
+        @type == "enum"
+      end
+
+      def c_enum_name
+        @c_enum
+      end
+
+      def c_enum_type
+        "#{@c_enum}_T"
+      end
+
+      def c_enum_constant(value)
+        "#{@c_enum.upcase}_#{value.to_s.upcase}"
+      end
+
+      def c_enum_from_string
+        "#{@c_enum}_from_string"
+      end
+
+      def c_enum_to_string
+        "#{@c_enum}_to_string"
       end
 
       def uint64?
@@ -1253,6 +1281,7 @@ module Herb
 
       def java_jni_signature
         return "()Z" if boolean?
+        return "()Ljava/lang/String;" if enum?
         return "()Ljava/lang/Integer;" if nullable?
 
         "()I"
@@ -1264,6 +1293,7 @@ module Herb
 
       def ruby_default
         return "[]" if string_array?
+        return @default.inspect if enum?
         return "nil" if nullable? && @default.nil?
 
         if @ruby_unit == "seconds" && @default_ms
@@ -1276,12 +1306,14 @@ module Herb
       end
 
       def ruby_default_type
+        return "String" if enum?
         return ruby_type unless nullable?
 
         ruby_type.delete_suffix("?")
       end
 
       def c_default
+        return c_enum_constant(@default) if enum?
         return @null_sentinel if nullable? && @default.nil?
         return @default_ms if @default_ms
 
@@ -1290,12 +1322,14 @@ module Herb
 
       def js_default
         return "[]" if string_array?
+        return @default.inspect if enum?
         return "null" if nullable? && @default.nil?
 
         @default_ms || @default
       end
 
       def java_default
+        return @default.inspect if enum?
         return "null" if nullable? && @default.nil?
 
         @default_ms || @default
@@ -1303,6 +1337,7 @@ module Herb
 
       def rust_default
         return "None" if string_array?
+        return "String::from(#{@default.inspect})" if enum?
         return "None" if nullable? && @default.nil?
 
         value = @default_ms || @default
@@ -1315,6 +1350,7 @@ module Herb
         return "uint64_t" if uint64?
         return "uint32_t*" if pointer?
         return "const hb_string_T*" if string_array?
+        return c_enum_type if enum?
 
         "uint32_t"
       end
@@ -1322,6 +1358,7 @@ module Herb
       def ruby_type
         return "bool" if boolean?
         return "Array[String]" if string_array?
+        return "String | Symbol" if enum?
         return "Numeric" if @ruby_unit == "seconds"
 
         nullable? ? "Integer?" : "Integer"
@@ -1330,12 +1367,14 @@ module Herb
       def typescript_type
         return "boolean" if boolean?
         return "string[]" if string_array?
+        return @values.map(&:inspect).join(" | ") if enum?
 
         nullable? ? "number | null" : "number"
       end
 
       def java_type
         return "boolean" if boolean?
+        return "String" if enum?
 
         nullable? ? "Integer" : "int"
       end
@@ -1343,6 +1382,7 @@ module Herb
       def rust_type
         return "bool" if boolean?
         return "Option<Vec<String>>" if string_array?
+        return "String" if enum?
 
         nullable? ? "Option<u32>" : "u32"
       end

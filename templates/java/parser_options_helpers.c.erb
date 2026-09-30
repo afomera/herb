@@ -1,5 +1,7 @@
 #include "parser_options_helpers.h"
 
+#include <string.h>
+
 void herb_extract_parser_options(JNIEnv* env, jobject options, parser_options_T* parser_options) {
   if (options == NULL) { return; }
 
@@ -13,6 +15,23 @@ void herb_extract_parser_options(JNIEnv* env, jobject options, parser_options_T*
     if (method != NULL) {
       jboolean value = (*env)->CallBooleanMethod(env, options, method);
       parser_options-><%= field.c_name %> = (value == JNI_TRUE);
+    }
+  }
+<%- elsif field.enum? -%>
+  {
+    jmethodID method = (*env)->GetMethodID(env, optionsClass, "<%= field.java_getter %>", "<%= field.java_jni_signature %>");
+
+    if (method != NULL) {
+      jstring value = (jstring) (*env)->CallObjectMethod(env, options, method);
+
+      if (value != NULL) {
+        const char* chars = (*env)->GetStringUTFChars(env, value, NULL);
+
+        if (chars != NULL) {
+          <%= field.c_enum_from_string %>(chars, strlen(chars), &parser_options-><%= field.c_name %>);
+          (*env)->ReleaseStringUTFChars(env, value, chars);
+        }
+      }
     }
   }
 <%- elsif field.nullable? -%>

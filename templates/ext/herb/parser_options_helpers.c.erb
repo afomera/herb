@@ -10,6 +10,24 @@ void herb_extract_parser_options(VALUE options, parser_options_T* parser_options
     if (NIL_P(value)) { value = rb_hash_lookup(options, ID2SYM(rb_intern("<%= field.snake_case %>"))); }
     if (!NIL_P(value)) { parser_options-><%= field.c_name %> = RTEST(value); }
   }
+<%- elsif field.enum? -%>
+  {
+    VALUE value = rb_hash_lookup(options, rb_utf8_str_new_cstr("<%= field.snake_case %>"));
+    if (NIL_P(value)) { value = rb_hash_lookup(options, ID2SYM(rb_intern("<%= field.snake_case %>"))); }
+
+    if (!NIL_P(value)) {
+      if (SYMBOL_P(value)) { value = rb_sym2str(value); }
+      if (!RB_TYPE_P(value, T_STRING)) { rb_raise(rb_eTypeError, "<%= field.snake_case %> must be a String or Symbol"); }
+
+      if (!<%= field.c_enum_from_string %>(RSTRING_PTR(value), (size_t) RSTRING_LEN(value), &parser_options-><%= field.c_name %>)) {
+        rb_raise(
+          rb_eArgError,
+          "invalid <%= field.snake_case %>: %" PRIsVALUE " (expected one of: <%= field.values.join(", ") %>)",
+          value
+        );
+      }
+    }
+  }
 <%- elsif field.ruby_unit == "seconds" -%>
   {
     VALUE value = rb_hash_lookup(options, rb_utf8_str_new_cstr("<%= field.snake_case %>"));
@@ -52,6 +70,12 @@ VALUE herb_build_parser_options_hash(const parser_options_T* options) {
 
     rb_hash_aset(kwargs, ID2SYM(rb_intern("<%= field.snake_case %>")), <%= field.snake_case %>);
   }
+<%- elsif field.enum? -%>
+  rb_hash_aset(
+    kwargs,
+    ID2SYM(rb_intern("<%= field.snake_case %>")),
+    rb_utf8_str_new_cstr(<%= field.c_enum_to_string %>(options-><%= field.c_name %>))
+  );
 <%- elsif field.ruby_unit == "seconds" -%>
   rb_hash_aset(kwargs, ID2SYM(rb_intern("<%= field.snake_case %>")), DBL2NUM((double) options-><%= field.c_name %> / 1000.0));
 <%- elsif field.nullable? -%>
