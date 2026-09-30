@@ -539,8 +539,18 @@ static VALUE Herb_diff(int argc, VALUE* argv, VALUE self) {
 
   parser_options_T parser_options = HERB_DEFAULT_PARSER_OPTIONS;
   herb_diff_options_T diff_options = HERB_DEFAULT_DIFF_OPTIONS;
+  hb_string_T opener_buffer[HERB_MAX_ERB_OPENERS];
+
+  herb_extract_parser_options(options, &parser_options);
 
   if (!NIL_P(options)) {
+    size_t opener_count = read_erb_openers(options, opener_buffer);
+
+    if (opener_count != SIZE_MAX) {
+      parser_options.erb_openers = opener_buffer;
+      parser_options.erb_opener_count = opener_count;
+    }
+
     VALUE track_whitespace_changes = rb_hash_lookup(options, rb_utf8_str_new_cstr("track_whitespace_changes"));
     if (NIL_P(track_whitespace_changes)) {
       track_whitespace_changes = rb_hash_lookup(options, ID2SYM(rb_intern("track_whitespace_changes")));

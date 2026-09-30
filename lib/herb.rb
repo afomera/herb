@@ -88,7 +88,7 @@ module Herb
     Backend.extract_html(...)
   end
 
-  #: (String old_source, String new_source, ?track_whitespace_changes: bool) -> Herb::Diff::Result
+  #: (String old_source, String new_source, ?track_whitespace_changes: bool, ?language: String | Symbol, ?exact_semantics: bool, ?slim_shortcuts: Hash[String, String], ?slim_merge_attrs: Hash[String, String], ?erb_openers: Array[String]) -> Herb::Diff::Result
   def self.diff(...)
     Backend.diff(...)
   end
