@@ -37,6 +37,18 @@ static bool is_strict_locals_node(const AST_ERB_COMMENT_NODE_T* node) {
   return strncmp(content, STRICT_LOCALS_PREFIX, strlen(STRICT_LOCALS_PREFIX)) == 0;
 }
 
+// Rails finds the magic comment in the template source (ActionView::Template::STRICT_LOCALS_REGEX, `# locals:`).
+// In ERB that's `<%# locals: %>`; other template languages need the `#` right before the comment's content
+// (Slim: `/# locals: (...)`, not `/ locals: (...)`).
+static bool is_recognized_by_rails(const AST_ERB_COMMENT_NODE_T* node, const analyze_ruby_context_T* context) {
+  if (!context->options || context->options->language == HERB_LANGUAGE_ERB) { return true; }
+  if (!context->source) { return false; }
+
+  uint32_t offset = node->content->range.from;
+
+  return offset > 0 && context->source[offset - 1] == '#';
+}
+
 static const char* find_params_open(const char* content) {
   while (is_whitespace(*content)) {
     content++;
@@ -299,6 +311,7 @@ static void transform_strict_locals_in_array(hb_array_T* array, analyze_ruby_con
     AST_ERB_COMMENT_NODE_T* erb_node = (AST_ERB_COMMENT_NODE_T*) child;
 
     if (!is_strict_locals_node(erb_node)) { continue; }
+    if (!is_recognized_by_rails(erb_node, context)) { continue; }
 
     AST_ERB_STRICT_LOCALS_NODE_T* strict_locals_node =
       create_strict_locals_node(erb_node, context->source, context->allocator, context->options);
