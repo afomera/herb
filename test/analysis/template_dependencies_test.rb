@@ -577,4 +577,21 @@ class TemplateDependenciesTest < Minitest::Spec
 
     assert_empty affected
   end
+
+  test "analyzes a Slim template as Slim" do
+    entry = write_template("posts/show.html.slim", "h1 = @post.title\n- if @admin\n  p = Post.count\n")
+
+    result = analyzer.analyze(entry)
+
+    assert_equal ["@admin", "@post"], result.instance_variables
+    assert_equal ["Post.count"], result.constants
+  end
+
+  test "finds the nodes a state reaches in a Slim template at the engine's node paths" do
+    entry = write_template("posts/show.html.slim", "div\n  h1 Hi\n  - if @admin\n    p Admin\n")
+
+    nodes = analyzer.affected_nodes(entry, "@admin", conditions_only: true)
+
+    assert_equal([[0, 1]], nodes.map { |node| node[:node_path] })
+  end
 end

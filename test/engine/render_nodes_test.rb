@@ -94,6 +94,8 @@ module Engine
        - posts/_nope.herb
        - posts/_nope.turbo_stream.erb
        - posts/_nope.turbo_stream.herb
+       - posts/_nope.html.slim
+       - posts/_nope.slim
      Did you mean: 'posts/card'?
 ), diagnostics.first.message
     end
@@ -124,6 +126,8 @@ module Engine
        - app/views/nonexistent/_missing.herb
        - app/views/nonexistent/_missing.turbo_stream.erb
        - app/views/nonexistent/_missing.turbo_stream.herb
+       - app/views/nonexistent/_missing.html.slim
+       - app/views/nonexistent/_missing.slim
 ), diagnostics.first.message
       assert_equal "RenderUnresolved", diagnostics.first.code
     end
@@ -157,6 +161,8 @@ module Engine
        - app/views/missing/_partial.herb
        - app/views/missing/_partial.turbo_stream.erb
        - app/views/missing/_partial.turbo_stream.herb
+       - app/views/missing/_partial.html.slim
+       - app/views/missing/_partial.slim
 ), diagnostics.first.message
     end
 

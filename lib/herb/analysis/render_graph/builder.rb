@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../../template_language"
 require_relative "../partial_resolution"
 require_relative "../render_graph"
 
@@ -65,7 +66,7 @@ module Herb
 
           return NOTHING_COLLECTED if renders_nothing && !PartialResolution.partial_path?(file)
 
-          scanned = scan_template(parse(source))
+          scanned = scan_template(parse(source, file))
           unresolved = 0
 
           scanned.sites.each do |site|
@@ -193,9 +194,9 @@ module Herb
           end
         end
 
-        #: (String) -> Herb::AST::DocumentNode
-        def parse(source)
-          ::Herb.parse(source, **PARSER_OPTIONS).value
+        #: (String, ?String?) -> Herb::AST::DocumentNode
+        def parse(source, file = nil)
+          ::Herb.parse(source, **PARSER_OPTIONS, **TemplateLanguage.compile_parser_options(file)).value
         end
 
         #: (String) -> String?

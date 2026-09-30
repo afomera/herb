@@ -9,8 +9,15 @@ module Herb
       class DependencyCollector < ::Herb::Visitor
         attr_reader :instance_variables, :constants, :locals_declared, :locals_received, :helper_calls, :unknown_calls, :render_calls
 
-        def initialize(helper_registry, custom_helpers, prescanned_locals = Set.new)
+        # Control flow in a Slim template (`- if @admin`) carries no Prism node, since the Slim
+        # frontend doesn't annotate one, so with `control_flow: true` a fragment that doesn't parse
+        # on its own is read inside the construct it opens or continues.
+        CONTROL_FLOW_WRAPPERS = ["%s\nend", "if nil\n%s\nend", "case nil\n%s\nend"].freeze #: Array[String]
+
+        def initialize(helper_registry, custom_helpers, prescanned_locals = Set.new, control_flow: false)
           super()
+
+          @control_flow = control_flow
 
           @helper_registry = helper_registry
           @custom_helpers = custom_helpers
@@ -128,11 +135,26 @@ module Herb
         def analyze_ruby_expression(code)
           return if code.nil? || code.empty?
 
-          result = Prism.parse(code)
-          return if result.errors.any?
+          result = parse_fragment(code)
+          return unless result
 
           walk_prism_node(result.value)
         rescue StandardError
+          nil
+        end
+
+        def parse_fragment(code)
+          result = Prism.parse(code)
+
+          return result if result.errors.none?
+          return nil unless @control_flow
+
+          CONTROL_FLOW_WRAPPERS.each do |wrapper|
+            wrapped = Prism.parse(wrapper.sub("%s") { code })
+
+            return wrapped if wrapped.errors.none?
+          end
+
           nil
         end
 

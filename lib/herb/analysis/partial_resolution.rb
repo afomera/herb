@@ -13,7 +13,9 @@ module Herb
         ".erb",
         ".herb",
         ".turbo_stream.erb",
-        ".turbo_stream.herb"
+        ".turbo_stream.herb",
+        ".html.slim",
+        ".slim"
       ].freeze #: Array[String]
 
       EXTENSION_ALTERNATIVES = EXTENSIONS.map { |extension| extension.delete_prefix(".") }.join(",") #: String

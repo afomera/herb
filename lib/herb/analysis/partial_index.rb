@@ -2,6 +2,8 @@
 
 require "pathname"
 
+require_relative "../template_language"
+
 require_relative "partial_declaration"
 require_relative "partial_resolution"
 
@@ -162,7 +164,7 @@ module Herb
         return nil unless File.exist?(file)
 
         source = File.read(file)
-        document = ::Herb.parse(source, strict_locals: true).value
+        document = ::Herb.parse(source, strict_locals: true, **TemplateLanguage.compile_parser_options(file)).value
 
         PartialDeclaration.from_document(document, file)
       rescue StandardError

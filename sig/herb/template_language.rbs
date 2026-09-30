@@ -19,5 +19,12 @@ module Herb
     # Whether a file is an ERB template, as opposed to another language Herb parses into the same tree.
     # : ((String | Pathname)?) -> bool
     def self.erb?: ((String | Pathname)?) -> bool
+
+    # The parser options that build the tree `Herb::Engine` compiles the template at `path` from, for
+    # code that analyzes a template and has to agree with the compile about its nodes and their
+    # paths. None for ERB. A Slim template is parsed as Slim with the project's Slim settings and
+    # `exact_semantics`, the way the engine parses it.
+    # : ((String | Pathname)?, ?untyped) -> Hash[Symbol, untyped]
+    def self.compile_parser_options: ((String | Pathname)?, ?untyped) -> Hash[Symbol, untyped]
   end
 end

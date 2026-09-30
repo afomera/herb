@@ -120,5 +120,20 @@ module Analysis
         assert_equal "app/views/users/_row.html.erb", resolver.resolve("row", from: "app/views/users/show.html.erb").identifier
       end
     end
+
+    test "resolves a Slim partial, after an ERB one of the same name" do
+      Dir.mktmpdir("herb-slim") do |root|
+        FileUtils.mkdir_p(File.join(root, "app", "views", "shared"))
+        File.write(File.join(root, "app", "views", "shared", "_badge.html.slim"), "span Hi\n")
+
+        resolver = PartialResolver.new(root)
+
+        assert_equal "app/views/shared/_badge.html.slim", resolver.resolve("shared/badge").identifier
+
+        File.write(File.join(root, "app", "views", "shared", "_badge.html.erb"), "<span>Hi</span>")
+
+        assert_equal "app/views/shared/_badge.html.erb", resolver.resolve("shared/badge").identifier
+      end
+    end
   end
 end

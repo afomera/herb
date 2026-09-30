@@ -130,8 +130,8 @@ module Herb
         # : (Array[String], Hash[String, Array[YieldSite]], Hash[String, Array[PartialCallSite]]) -> void
         def add_layout_call_sites: (Array[String], Hash[String, Array[YieldSite]], Hash[String, Array[PartialCallSite]]) -> void
 
-        # : (String) -> Herb::AST::DocumentNode
-        def parse: (String) -> Herb::AST::DocumentNode
+        # : (String, ?String?) -> Herb::AST::DocumentNode
+        def parse: (String, ?String?) -> Herb::AST::DocumentNode
 
         # : (String) -> String?
         def read: (String) -> String?

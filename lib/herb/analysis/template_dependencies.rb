@@ -36,14 +36,23 @@ module Herb
         file_path = @project_path.join(file_path).to_s unless Pathname.new(file_path).absolute?
         source = File.read(file_path)
 
-        ast = ::Herb.parse(source, render_nodes: true, strict_locals: true, prism_nodes: true, prism_program: true, track_whitespace: true, iteration_nodes: true).value
+        ast = ::Herb.parse(
+          source,
+          render_nodes: true, strict_locals: true, prism_nodes: true, prism_program: true, track_whitespace: true, iteration_nodes: true,
+          **TemplateLanguage.compile_parser_options(file_path)
+        ).value
 
         known_helpers = @custom_helpers.dup
         component_methods_for(file_path).each { |m| known_helpers.add(m) }
 
         locals = RubyLocalsIndex.from_document(ast, source)
 
-        collector = DependencyCollector.new(@helper_registry, known_helpers, locals.assignment_names.to_set | guarded_locals(source))
+        collector = DependencyCollector.new(
+          @helper_registry,
+          known_helpers,
+          locals.assignment_names.to_set | guarded_locals(source),
+          control_flow: !TemplateLanguage.erb?(file_path)
+        )
         ast.accept(collector)
 
         Result.new(
@@ -78,7 +87,11 @@ module Herb
         file_path = @project_path.join(file_path).to_s unless Pathname.new(file_path).absolute?
         source = File.read(file_path)
 
-        ast = ::Herb.parse(source, render_nodes: true, strict_locals: true, prism_nodes: true, track_whitespace: true, iteration_nodes: true).value
+        ast = ::Herb.parse(
+          source,
+          render_nodes: true, strict_locals: true, prism_nodes: true, track_whitespace: true, iteration_nodes: true,
+          **TemplateLanguage.compile_parser_options(file_path)
+        ).value
 
         nodes_in(ast, state, conditions_only: conditions_only)
       end

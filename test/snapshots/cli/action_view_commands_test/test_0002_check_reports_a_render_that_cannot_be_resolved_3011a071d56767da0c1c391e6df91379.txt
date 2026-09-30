@@ -15,7 +15,7 @@ Checking render calls in 1 file...
  These render calls reference partials that could not be found on disk.
 
  app/views/posts/index.html.erb:
-   ✗ posts/missing at 1:7 - app/views/posts/_missing.html.erb, app/views/posts/_missing.html.herb, app/views/posts/_missing.erb, app/views/posts/_missing.herb, app/views/posts/_missing.turbo_stream.erb, app/views/posts/_missing.turbo_stream.herb
+   ✗ posts/missing at 1:7 - app/views/posts/_missing.html.erb, app/views/posts/_missing.html.herb, app/views/posts/_missing.erb, app/views/posts/_missing.herb, app/views/posts/_missing.turbo_stream.erb, app/views/posts/_missing.turbo_stream.herb, app/views/posts/_missing.html.slim, app/views/posts/_missing.slim
 
  ────────────────────────────────────────────────────────────
 
