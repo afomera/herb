@@ -70,8 +70,9 @@ jobs:
       - name: Build tailwind-class-sorter package
         run: yarn nx build @herb-tools/tailwind-class-sorter
 
-      - name: Run `build` for all NX packages
-        run: yarn build
+      # The docs site and playground aren't part of the preview, and the docs build calls the GitHub API
+      - name: Run `build` for the NX packages
+        run: yarn nx run-many -t build --all --exclude=herb-language-server,docs,playground
 
       - name: Pack herb-slim-preview.tgz
         run: |
