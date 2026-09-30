@@ -7,12 +7,14 @@
 #include "../lib/hb_buffer.h"
 #include "../parser/parser.h"
 #include "analyzed_ruby.h"
+#include "ruby_program.h"
 
 typedef struct TAG_HELPER_SCOPE_STRUCT {
   hb_buffer_T buffer;
   pm_options_t options;
   pm_parser_t parser;
   pm_node_t* root;
+  const herb_ruby_program_T* program; // set when the scope was built from a frontend's Ruby program
 } tag_helper_scope_T;
 
 typedef struct ANALYZE_RUBY_CONTEXT_STRUCT {
@@ -64,6 +66,17 @@ void herb_analyze_parse_errors(
 void herb_analyze_parse_tree(
   AST_DOCUMENT_NODE_T* document,
   const char* source,
+  const parser_options_T* options,
+  hb_allocator_T* allocator
+);
+
+// Like `herb_analyze_parse_tree`, for documents built by a frontend whose source is not HTML+ERB.
+// `ruby_program` replaces the Ruby that would otherwise be extracted from `source` (see ruby_program.h).
+// Node locations and token ranges must still point into `source`.
+void herb_analyze_parse_tree_with_ruby_program(
+  AST_DOCUMENT_NODE_T* document,
+  const char* source,
+  const herb_ruby_program_T* ruby_program,
   const parser_options_T* options,
   hb_allocator_T* allocator
 );

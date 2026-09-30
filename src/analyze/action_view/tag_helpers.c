@@ -101,6 +101,11 @@ static bool build_scope_options_from_context(
   if (!context || !context->tag_helper_scope || !context->tag_helper_scope->root) { return false; }
   if (to <= from) { return false; }
 
+  if (context->tag_helper_scope->program
+      && !herb_ruby_program_map_source_range(context->tag_helper_scope->program, &from, &to)) {
+    return false;
+  }
+
   local_read_search_T search = { .scope = context->tag_helper_scope,
                                  .constants = hb_array_init(4, context->allocator),
                                  .from = from,

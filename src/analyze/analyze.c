@@ -1226,6 +1226,43 @@ static tag_helper_scope_T* tag_helper_scope_init(const char* source, hb_allocato
   return scope;
 }
 
+static tag_helper_scope_T* tag_helper_scope_init_from_ruby_program(
+  const herb_ruby_program_T* program,
+  hb_allocator_T* allocator
+) {
+  if (!program || !program->value || program->length == 0) { return NULL; }
+
+  tag_helper_scope_T* scope = hb_allocator_alloc(allocator, sizeof(tag_helper_scope_T));
+  if (!scope) { return NULL; }
+
+  memset(scope, 0, sizeof(tag_helper_scope_T));
+
+  if (!hb_buffer_init(&scope->buffer, program->length, allocator)) {
+    hb_allocator_dealloc(allocator, scope);
+
+    return NULL;
+  }
+
+  hb_buffer_append_with_length(&scope->buffer, program->value, program->length);
+  scope->program = program;
+
+  pm_options_partial_script_set(&scope->options, true);
+  pm_parser_init(&scope->parser, (const uint8_t*) scope->buffer.value, scope->buffer.length, &scope->options);
+
+  scope->root = pm_parse(&scope->parser);
+
+  if (!scope->root) {
+    pm_parser_free(&scope->parser);
+    pm_options_free(&scope->options);
+    hb_buffer_free(&scope->buffer);
+    hb_allocator_dealloc(allocator, scope);
+
+    return NULL;
+  }
+
+  return scope;
+}
+
 static void tag_helper_scope_free(tag_helper_scope_T* scope, hb_allocator_T* allocator) {
   if (!scope) { return; }
 
@@ -1239,6 +1276,16 @@ static void tag_helper_scope_free(tag_helper_scope_T* scope, hb_allocator_T* all
 void herb_analyze_parse_tree(
   AST_DOCUMENT_NODE_T* document,
   const char* source,
+  const parser_options_T* options,
+  hb_allocator_T* allocator
+) {
+  herb_analyze_parse_tree_with_ruby_program(document, source, NULL, options, allocator);
+}
+
+void herb_analyze_parse_tree_with_ruby_program(
+  AST_DOCUMENT_NODE_T* document,
+  const char* source,
+  const herb_ruby_program_T* ruby_program,
   const parser_options_T* options,
   hb_allocator_T* allocator
 ) {
@@ -1276,7 +1323,8 @@ void herb_analyze_parse_tree(
   }
 
   if (options && options->action_view_helpers) {
-    context.tag_helper_scope = tag_helper_scope_init(source, allocator);
+    context.tag_helper_scope = ruby_program ? tag_helper_scope_init_from_ruby_program(ruby_program, allocator)
+                                            : tag_helper_scope_init(source, allocator);
 
     herb_visit_node((AST_NODE_T*) document, transform_tag_helper_nodes, &context);
 
@@ -1296,7 +1344,11 @@ void herb_analyze_parse_tree(
 
   herb_visit_node((AST_NODE_T*) document, detect_invalid_erb_structures, &invalid_context);
 
-  herb_analyze_parse_errors(document, source, options, allocator);
+  if (ruby_program) {
+    herb_analyze_parse_errors_from_ruby_program(document, ruby_program, options, allocator);
+  } else {
+    herb_analyze_parse_errors(document, source, options, allocator);
+  }
 
   herb_parser_match_html_tags_post_analyze(document, options, allocator);
 
