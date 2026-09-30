@@ -224,4 +224,21 @@ describe("@herb-tools/node", () => {
     expect(whenNode.then_keyword.end.line).toBe(2)
     expect(whenNode.then_keyword.end.column).toBe(19)
   })
+
+  test("parse() with language: 'slim' builds an HTML+ERB tree from a Slim template", async () => {
+    const result = Herb.parse(dedent`
+      #main.card
+        - if admin
+          p = user.name
+    `, { language: "slim" })
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.options.language).toBe("slim")
+
+    const element = result.value.children[0] as any
+    expect(element.type).toBe("AST_HTML_ELEMENT_NODE")
+    expect(element.tag_name.value).toBe("div")
+    expect(element.element_source).toBe("Slim")
+    expect(element.body[0].type).toBe("AST_ERB_IF_NODE")
+  })
 })
