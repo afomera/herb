@@ -1,6 +1,6 @@
 import { isParseResult, isVoidElement } from "@herb-tools/core"
 
-import { codeLines, dedent, erbCode, erbOpening, isERBOutput, isERBTag } from "./erb-tags.js"
+import { codeLines, dedent, erbCode, erbOpening, flowsInline, isERBOutput, isERBTag, isRepeatedBlock } from "./erb-tags.js"
 import { diagnosticAt } from "./conversion-diagnostic.js"
 import { SLIM_MERGE_ATTRS_OPTION_DEFAULT, SLIM_SHORTCUTS_OPTION_DEFAULT, parseSlimShortcutsOption } from "./slim-shortcuts.js"
 
@@ -18,6 +18,13 @@ export interface SlimPrinterOptions {
   mergeAttrs?: SlimMergeAttrsOption
   /** Parses HTML+ERB. Used for the content of conditional comments (`<!--[if IE]>...<![endif]-->`). */
   parse?: (source: string) => ParseResult
+  /**
+   * Print `attr="<%= code %>"` as Slim's `attr=code` instead of `attr="#{code}"`. `attr=code` is the idiomatic
+   * Slim, but it changes what renders: Slim omits the attribute when the value is nil or false, renders it bare
+   * when it is true, and flattens Arrays in merged attributes (`class`), where the ERB always rendered the
+   * value's `to_s`. Each such attribute is reported in `warnings`. Defaults to false.
+   */
+  idiomaticAttributes?: boolean
 }
 
 // Pieces of an element's content: formatting whitespace (a line break and the indentation after it) is a `break`.
@@ -34,7 +41,25 @@ type Item =
 
 type TextLine = { pieces: Piece[], indent: number, blankBefore: number }
 
+// A run of ERB output on its own `=` lines (`before` / `after`: the `<` / `>` whitespace markers).
+type OutputEntry = { node: Nodes.ERBContentNode, before: boolean, after: boolean }
+type Chunk = { kind: "outputs", entries: OutputEntry[] } | { kind: "text", lines: TextLine[] }
+
+// How the whitespace between an element's children renders: a line break between inline content is a space
+// ("normal"), is never rendered between the children of these elements ("insensitive"), or is kept as it is.
+type WhitespaceContext = "normal" | "insensitive" | "preserve"
+
 const WHITESPACE_PRESERVING = new Set(["pre", "textarea"])
+const WHITESPACE_INSENSITIVE = new Set([
+  "html", "head", "table", "thead", "tbody", "tfoot", "tr", "colgroup", "ul", "ol", "dl", "select", "optgroup", "datalist",
+])
+
+// HTML boolean attributes: `attr="true"` and Slim's bare `attr` (from `attr=true`) mean the same.
+const BOOLEAN_ATTRIBUTES = new Set([
+  "allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled",
+  "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple", "muted", "nomodule", "novalidate",
+  "open", "playsinline", "readonly", "required", "reversed", "selected",
+])
 const EMBEDDED = new Map([["script", "javascript:"], ["style", "css:"]])
 
 // Temple::HTML::Fast doctypes (:html format, plus the :xhtml ones)
@@ -55,6 +80,20 @@ const SLIM_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "
 
 function escapeSlim(text: string): string {
   return text.replace(/[&<>"']/g, character => SLIM_ESCAPES[character])
+}
+
+function mergeText(pieces: Piece[]): Piece[] {
+  return pieces.reduce<Piece[]>((merged, piece) => {
+    const previous = merged[merged.length - 1]
+
+    if (piece.kind === "text" && previous?.kind === "text") {
+      merged[merged.length - 1] = { ...previous, text: previous.text + piece.text }
+    } else {
+      merged.push(piece)
+    }
+
+    return merged
+  }, [])
 }
 
 function unescapeSlim(text: string): string {
@@ -105,12 +144,14 @@ function isSimpleCode(code: string): boolean {
 }
 
 /**
- * Prints a Herb HTML+ERB syntax tree as idiomatic Slim: `.card#main` shortcuts, `=` / `==` / `-` lines,
- * implied `end`s with `elsif` / `else` / `when` as siblings, `attr=code` and `attr="text #{code}"` attributes,
- * `|` text blocks, `/!` comments and `javascript:` / `css:` blocks.
+ * Prints a Herb HTML+ERB syntax tree as idiomatic Slim that renders the same HTML: `.card#main` shortcuts,
+ * `=` / `==` / `-` lines, implied `end`s with `elsif` / `else` / `when` as siblings, `attr="#{code}"` and
+ * `attr="text #{code}"` attributes (`attr=code` with `idiomaticAttributes`), `|` text blocks, `/!` comments,
+ * `/# locals:` and `javascript:` / `css:` blocks.
  *
  * Whitespace that contains a line break is formatting (Slim doesn't render whitespace between lines), except
- * the spaces before the line break, which are kept (`'` text or `>` / `<` markers). Constructs that have no Slim
+ * the spaces before the line break, and a line break between inline content (text, output, inline elements),
+ * which renders as a space: those are kept (`'` text or `>` / `<` markers). Constructs that have no Slim
  * form (ERB control flow inside attribute values or open tags, a stray `<% end %>`, ...) are reported in
  * `errors` and printed as a `/ herb:` comment holding the original ERB. Places where the Slim renders
  * differently from the ERB are reported in `warnings`.
@@ -123,6 +164,8 @@ export class SlimPrinter {
   private readonly shortcuts: ParsedSlimShortcut[]
   private readonly mergeAttrs: SlimMergeAttrsOption
   private readonly parse?: (source: string) => ParseResult
+  private readonly idiomaticAttributes: boolean
+  private whitespace: WhitespaceContext = "normal"
 
   static print(input: Node | ParseResult, options: SlimPrinterOptions = {}): string {
     return new SlimPrinter(options).print(input)
@@ -133,6 +176,7 @@ export class SlimPrinter {
     this.shortcuts = parseSlimShortcutsOption(options.shortcuts ?? SLIM_SHORTCUTS_OPTION_DEFAULT)
     this.mergeAttrs = options.mergeAttrs ?? SLIM_MERGE_ATTRS_OPTION_DEFAULT
     this.parse = options.parse
+    this.idiomaticAttributes = options.idiomaticAttributes ?? false
   }
 
   print(input: Node | ParseResult): string {
@@ -157,7 +201,7 @@ export class SlimPrinter {
 
   // --- content --------------------------------------------------------------------------------------------------
 
-  private pieces(nodes: Node[]): Piece[] {
+  private pieces(nodes: Node[], repeated = false): Piece[] {
     const pieces: Piece[] = []
 
     const pushText = (text: string, node: Node) => {
@@ -197,21 +241,77 @@ export class SlimPrinter {
       }
     }
 
-    // merge adjacent text pieces
-    return pieces.reduce<Piece[]>((merged, piece) => {
-      const previous = merged[merged.length - 1]
+    const merged = mergeText(this.lineBreakSpaces(mergeText(pieces)))
 
-      if (piece.kind === "text" && previous?.kind === "text") {
-        merged[merged.length - 1] = { ...previous, text: previous.text + piece.text }
-      } else {
-        merged.push(piece)
-      }
-
-      return merged
-    }, [])
+    return repeated ? mergeText(this.iterationSpace(merged)) : merged
   }
 
-  private items(nodes: Node[]): Item[] {
+  // The whitespace at the ends of a loop body renders between the iterations: when both ends of the body are
+  // inline content, keep it as a space after the last one (`=> link_to ...`, `' text`, `a>`).
+  private iterationSpace(pieces: Piece[]): Piece[] {
+    if (this.whitespace !== "normal") return pieces
+
+    const content = pieces.filter(piece => piece.kind !== "break")
+    const first = content[0]
+    const last = content[content.length - 1]
+
+    if (!first || !last) return pieces
+    if (pieces[0].kind !== "break" && pieces[pieces.length - 1].kind !== "break") return pieces
+
+    const flows = (piece: Piece) =>
+      piece.kind === "output" || (piece.kind === "text" && piece.text.trim() !== "") || (piece.kind === "node" && flowsInline(piece.node))
+
+    if (!flows(first) || !flows(last)) return pieces
+    if (first.kind === "text" && /^\s/.test(first.text)) return pieces
+    if (last.kind === "text" && /\s$/.test(last.text)) return pieces
+
+    const index = pieces.lastIndexOf(last)
+    return [...pieces.slice(0, index + 1), { kind: "text", text: " ", node: last.node }, ...pieces.slice(index + 1)]
+  }
+
+  // A line break between an inline element (`<code>`, `<a>`, ...) and the text, output or inline element next to
+  // it renders as a space: keep it as a space at the end of the line before the break (`' text`, `code>`, `=>`).
+  // Between text and output, the text block (or the `=` lines) keep it, see `textLines`.
+  private lineBreakSpaces(pieces: Piece[]): Piece[] {
+    if (this.whitespace !== "normal") return pieces
+
+    const result: Piece[] = []
+
+    for (let index = 0; index < pieces.length; index++) {
+      const piece = pieces[index]
+
+      if (piece.kind !== "break") {
+        result.push(piece)
+        continue
+      }
+
+      const previous = pieces[index - 1]
+      const next = pieces[index + 1]
+
+      if (!previous || !next || previous.kind === "break" || next.kind === "break") {
+        result.push(piece)
+        continue
+      }
+
+      const flows = (other: Piece) =>
+        other.kind === "output" || (other.kind === "text" && other.text.trim() !== "") || (other.kind === "node" && flowsInline(other.node))
+
+      const significant =
+        (previous.kind === "node" || next.kind === "node") &&
+        flows(previous) && flows(next) &&
+        !(previous.kind === "text" && /\s$/.test(previous.text))
+
+      if (!significant) {
+        result.push(piece)
+      } else {
+        result.push({ kind: "text", text: " ", node: previous.node }, piece)
+      }
+    }
+
+    return result
+  }
+
+  private items(nodes: Node[], repeated = false): Item[] {
     const items: Item[] = []
     let segment: Piece[] = []
 
@@ -272,7 +372,7 @@ export class SlimPrinter {
       segment = []
     }
 
-    for (const piece of this.pieces(nodes)) {
+    for (const piece of this.pieces(nodes, repeated)) {
       if (piece.kind === "node") {
         flush()
         items.push({ kind: "node", node: piece.node })
@@ -286,8 +386,8 @@ export class SlimPrinter {
     return items
   }
 
-  private block(nodes: Node[], depth: number): string[] {
-    const items = this.items(nodes)
+  private block(nodes: Node[], depth: number, repeated = false): string[] {
+    const items = this.items(nodes, repeated)
     const lines: string[] = []
 
     for (let index = 0; index < items.length; index++) {
@@ -296,9 +396,9 @@ export class SlimPrinter {
       const next = items[index + 1]
 
       if (item.kind === "space") {
-        // attached to the neighbouring elements as `>` / `<` markers, or to neighbouring text; the rest as bare
-        // `'` lines (each renders one space)
-        if (next?.kind === "text" || previous?.kind === "text") continue
+        // attached to the element before as its `>` marker, to neighbouring text, or to the element after as its
+        // `<` marker; the rest as bare `'` lines (each renders one space)
+        if ((next?.kind === "text" && !this.isElement(previous)) || previous?.kind === "text") continue
 
         const count = item.text.length - (this.isElement(previous) ? 1 : 0) - (this.isElement(next) && item.text.length > (this.isElement(previous) ? 1 : 0) ? 1 : 0)
 
@@ -307,7 +407,7 @@ export class SlimPrinter {
       }
 
       if (item.kind === "text") {
-        const leading = previous?.kind === "space" ? previous.text : ""
+        const leading = previous?.kind === "space" && !this.isElement(items[index - 2]) ? previous.text : ""
         const trailing = next?.kind === "space" ? next.text : ""
 
         lines.push(...this.textLines(item, depth, leading, trailing))
@@ -320,7 +420,7 @@ export class SlimPrinter {
         // `<` takes a space the element before hasn't taken with its `>`
         const leading = previous?.kind === "space" && items[index - 2]?.kind !== "text" &&
           previous.text.length > (this.isElement(items[index - 2]) ? 1 : 0)
-        const trailing = next?.kind === "space" && items[index + 2]?.kind !== "text"
+        const trailing = next?.kind === "space"
 
         lines.push(...this.element(node as Nodes.HTMLElementNode, depth, leading, trailing))
         continue
@@ -338,11 +438,119 @@ export class SlimPrinter {
 
   // A text item: `| text` (or `' text` for one trailing space), `= code` for a lone output, `=<`/`=>` markers.
   private textLines(item: Extract<Item, { kind: "text" }>, depth: number, leading: string, trailing: string): string[] {
-    const indent = this.indent(depth)
-    const lines = item.lines.map(line => ({ ...line, pieces: [...line.pieces] }))
+    const lines = item.lines.map(line => ({ ...line, pieces: mergeText([...line.pieces]) }))
 
-    if (leading) lines[0].pieces.unshift({ kind: "text", text: leading, node: item.node })
-    if (trailing) lines[lines.length - 1].pieces.push({ kind: "text", text: trailing, node: item.node })
+    if (leading) lines[0].pieces = mergeText([{ kind: "text", text: leading, node: item.node }, ...lines[0].pieces])
+    if (trailing) lines[lines.length - 1].pieces = mergeText([...lines[lines.length - 1].pieces, { kind: "text", text: trailing, node: item.node }])
+
+    const chunks = this.chunks(lines)
+    if (chunks === null) return this.textBlock(lines, depth)
+
+    const output: string[] = []
+
+    for (let index = 0; index < chunks.length; index++) {
+      const chunk = chunks[index]
+      const next = chunks[index + 1]
+
+      // the line break between two chunks renders as a space, unless there is whitespace on either side already
+      const space = !!next && this.whitespace === "normal" && !this.chunkEndsWithSpace(chunk) && !this.chunkStartsWithSpace(next)
+
+      if (chunk.kind === "outputs") {
+        chunk.entries.forEach((entry, position) => {
+          const after = entry.after || (space && position === chunk.entries.length - 1)
+          const raw = erbOpening(entry.node) === "<%=="
+
+          output.push(this.indent(depth) + (raw ? "==" : "=") + (entry.before ? "<" : "") + (after ? ">" : "") + " " + erbCode(entry.node).trim())
+        })
+      } else {
+        const textLines = chunk.lines.map(line => ({ ...line, pieces: [...line.pieces] }))
+        const last = textLines[textLines.length - 1]
+
+        if (space) last.pieces = mergeText([...last.pieces, { kind: "text", text: " ", node: item.node }])
+
+        output.push(...this.textBlock(textLines, depth))
+      }
+    }
+
+    return output
+  }
+
+  // Splits text lines into `=` lines for the lines that hold only ERB output (`<%= a %>`, `<%= a %> <%= b %>`),
+  // and text blocks for the rest. Null when there are no such lines.
+  private chunks(lines: TextLine[]): Chunk[] | null {
+    if (this.whitespace === "preserve") return null
+
+    const chunks: Chunk[] = []
+    let found = false
+
+    for (const line of lines) {
+      const entries = this.outputEntries(line)
+
+      if (entries) {
+        found = true
+        chunks.push({ kind: "outputs", entries })
+        continue
+      }
+
+      const previous = chunks[chunks.length - 1]
+
+      if (previous?.kind === "text") {
+        previous.lines.push(line)
+      } else {
+        chunks.push({ kind: "text", lines: [line] })
+      }
+    }
+
+    return found ? chunks : null
+  }
+
+  // The outputs of a line that holds nothing but ERB output, with single spaces (or nothing) between them.
+  private outputEntries(line: TextLine): OutputEntry[] | null {
+    const pieces = line.pieces
+    const entries: OutputEntry[] = []
+    let before = false
+
+    for (let index = 0; index < pieces.length; index++) {
+      const piece = pieces[index]
+
+      if (piece.kind === "output") {
+        entries.push({ node: piece.node, before: entries.length === 0 && before, after: false })
+      } else if (piece.kind === "text" && piece.text.trim() === "") {
+        if (entries.length === 0) {
+          before = true
+        } else if (index === pieces.length - 1 || piece.text === " ") {
+          entries[entries.length - 1].after = true
+        } else {
+          return null
+        }
+      } else {
+        return null
+      }
+    }
+
+    return entries.length > 0 ? entries : null
+  }
+
+  private chunkStartsWithSpace(chunk: Chunk): boolean {
+    if (chunk.kind === "outputs") return chunk.entries[0].before
+
+    const first = chunk.lines[0].pieces[0]
+
+    return first?.kind === "text" && /^\s/.test(first.text)
+  }
+
+  private chunkEndsWithSpace(chunk: Chunk): boolean {
+    if (chunk.kind === "outputs") return chunk.entries[chunk.entries.length - 1].after
+
+    const pieces = chunk.lines[chunk.lines.length - 1].pieces
+    const last = pieces[pieces.length - 1]
+
+    return last?.kind === "text" && /\s$/.test(last.text)
+  }
+
+  // Text lines as a `|` text block (`'` when it ends with a space), `= code` for a lone output.
+  private textBlock(lines: TextLine[], depth: number): string[] {
+    const indent = this.indent(depth)
 
     // a lone output: `= code`, with `=<` / `=>` for the whitespace around it
     if (lines.length === 1) {
@@ -382,7 +590,13 @@ export class SlimPrinter {
     const base = lines[0].indent >= 0 ? lines[0].indent
       : firstPiece?.kind === "text" && firstPiece.node.location ? firstPiece.node.location.start.column
       : Math.min(...lines.slice(1).map(line => line.indent))
-    const output = [indent + "| " + texts[0]]
+
+    // `'` renders a space after the block: the idiomatic (and editor-safe) form of a trailing space
+    const last = texts.length - 1
+    const quote = /[^ ] $/.test(texts[last])
+    if (quote) texts[last] = texts[last].slice(0, -1)
+
+    const output = [indent + (quote ? "' " : "| ") + texts[0]]
 
     for (let index = 1; index < texts.length; index++) {
       for (let blank = 0; blank < lines[index].blankBefore; blank++) output.push("")
@@ -432,11 +646,22 @@ export class SlimPrinter {
       return [indent + head + (!isVoidElement(name) && open.tag_closing?.value === "/>" ? "/" : "")]
     }
 
-    const body = node.body
-
     if (EMBEDDED.has(lowerName)) return this.embedded(node, head, EMBEDDED.get(lowerName)!, hasAttributes, depth)
     if (WHITESPACE_PRESERVING.has(lowerName)) return this.preformatted(node, head, depth)
 
+    const outer = this.whitespace
+    if (outer !== "preserve") this.whitespace = WHITESPACE_INSENSITIVE.has(lowerName) ? "insensitive" : "normal"
+
+    try {
+      return this.elementBody(node, head, hasAttributes, depth)
+    } finally {
+      this.whitespace = outer
+    }
+  }
+
+  private elementBody(node: Nodes.HTMLElementNode, head: string, hasAttributes: boolean, depth: number): string[] {
+    const indent = this.indent(depth)
+    const body = node.body
     const pieces = this.pieces(body)
     const inline = this.inlineText(pieces)
 
@@ -583,6 +808,17 @@ export class SlimPrinter {
     return [indent + head, inner + "| " + lines[0], ...lines.slice(1).map(line => (line.trim() === "" ? "" : inner + "  " + line.trimEnd()))]
   }
 
+  private preserving<T>(callback: () => T): T {
+    const outer = this.whitespace
+    this.whitespace = "preserve"
+
+    try {
+      return callback()
+    } finally {
+      this.whitespace = outer
+    }
+  }
+
   private preformatted(node: Nodes.HTMLElementNode, head: string, depth: number): string[] {
     const indent = this.indent(depth)
     let content = ""
@@ -590,7 +826,7 @@ export class SlimPrinter {
     for (const child of node.body) {
       if (child.type === "AST_HTML_TEXT_NODE" || child.type === "AST_LITERAL_NODE") content += escapeInterpolation((child as Nodes.HTMLTextNode).content)
       else if (isERBOutput(child) && this.interpolation(child) !== null) content += this.interpolation(child)
-      else return [indent + head, ...this.block(node.body, depth + 1)]
+      else return [indent + head, ...this.preserving(() => this.block(node.body, depth + 1))]
     }
 
     if (content.length === 0) return [indent + head]
@@ -758,26 +994,34 @@ export class SlimPrinter {
       return null
     }
 
-    // `attr=code` / `attr==code`
+    // `attr=code` / `attr==code` where that renders what the ERB rendered, or with `idiomaticAttributes`;
+    // `attr="#{code}"` otherwise (below)
     if (outputs.length === 1 && texts.every(text => text.content === "")) {
       const output = outputs[0]
       const code = erbCode(output).trim()
       const raw = erbOpening(output) === "<%=="
 
       const continued = code.includes("\n") && code.split("\n").slice(0, -1).every(line => /[,\\]\s*$/.test(line))
+      const simple = isSimpleCode(code) || (continued && isSimpleCode(code.replace(/[,\\]?\s*\n\s*/g, "")))
+      const printed = `${name}${raw ? "==" : "="}${continued ? erbCode(output).replace(/^\s+|\s+$/g, "") : code}`
 
-      if (isSimpleCode(code) || (continued && isSimpleCode(code.replace(/[,\\]?\s*\n\s*/g, "")))) {
+      if (!raw && this.bareValueIsEquivalent(name, code)) return printed
+
+      // multi-line code can't be a `#{}` interpolation
+      if (simple && (this.idiomaticAttributes || continued)) {
+        const merged = name in this.mergeAttrs
+
         this.warnings.push(
           diagnosticAt(
             output,
-            name in this.mergeAttrs ? "dynamic-class" : "dynamic-attribute",
-            name in this.mergeAttrs
-              ? `\`${name}=${code}\`: Slim flattens Array values and omits the attribute when the value is empty; the ERB rendered the value's \`to_s\`.`
-              : `\`${name}=${code}\`: Slim omits the attribute when the value is nil or false and renders a bare \`${name}\` when it is true; the ERB always rendered \`${name}="…"\`.`,
+            merged ? "dynamic-class" : "dynamic-attribute",
+            merged
+              ? `\`${name}=${code}\` changes what renders: Slim flattens Array values and omits the attribute when the value is empty; the ERB rendered the value's \`to_s\`.`
+              : `\`${name}=${code}\` changes what renders: Slim omits the attribute when the value is nil or false and renders a bare \`${name}\` when it is true; the ERB always rendered \`${name}="…"\`.`,
           ),
         )
 
-        return `${name}${raw ? "==" : "="}${continued ? erbCode(output).replace(/^\s+|\s+$/g, "") : code}`
+        return printed
       }
     }
 
@@ -816,6 +1060,16 @@ export class SlimPrinter {
     }
 
     return `${name}${decoded ? "=" : "=="}${quote}${value}${quote}`
+  }
+
+  // Values for which Slim's `attr=code` renders exactly what the ERB's `attr="<%= code %>"` rendered: numbers and
+  // symbols (never nil, false, true, an Array or empty), and `true` for an HTML boolean attribute (Slim renders
+  // it bare, which means the same as `attr="true"`).
+  private bareValueIsEquivalent(name: string, code: string): boolean {
+    if (/^-?\d[\d_]*(\.\d[\d_]*)?$/.test(code)) return true
+    if (/^:[A-Za-z_][A-Za-z0-9_]*[?!]?$/.test(code)) return true
+
+    return code === "true" && BOOLEAN_ATTRIBUTES.has(name.toLowerCase())
   }
 
   // --- other nodes ----------------------------------------------------------------------------------------------
@@ -866,7 +1120,7 @@ export class SlimPrinter {
 
         return [
           ...this.codeLine(indicator, block, depth),
-          ...this.block(block.body ?? [], depth + 1),
+          ...this.block(block.body ?? [], depth + 1, isRepeatedBlock(block)),
           ...(block.rescue_clause ? this.rescue(block.rescue_clause, depth) : []),
           ...(block.else_clause ? this.clause(block.else_clause, depth) : []),
           ...(block.ensure_clause ? this.clause(block.ensure_clause, depth) : []),
@@ -887,7 +1141,7 @@ export class SlimPrinter {
       case "AST_ERB_UNTIL_NODE":
       case "AST_ERB_FOR_NODE": {
         const loop = node as Nodes.ERBWhileNode
-        return [...this.codeLine(this.indicator(loop), loop, depth), ...this.block(loop.statements, depth + 1)]
+        return [...this.codeLine(this.indicator(loop), loop, depth), ...this.block(loop.statements, depth + 1, true)]
       }
       case "AST_ERB_CONTENT_NODE":
       case "AST_ERB_YIELD_NODE": {
@@ -908,10 +1162,14 @@ export class SlimPrinter {
         return [indent + "ruby:", ...lines.map(line => (line.length > 0 ? this.indent(depth + 1) + line : ""))]
       }
       case "AST_ERB_COMMENT_NODE": {
-        const lines = codeLines(erbCode(node as Nodes.ERBCommentNode))
+        const code = erbCode(node as Nodes.ERBCommentNode)
+        const lines = codeLines(code)
         if (lines.length === 0) return [indent + "/"]
 
-        return [indent + "/ " + lines[0], ...lines.slice(1).map(line => (line.length > 0 ? this.indent(depth + 1) + line : ""))]
+        // strict locals: Rails reads `# locals: (...)` from Slim templates (`/# locals:`), not `/ locals:`
+        const marker = /^\s+locals:/.test(code) ? "/# " : "/ "
+
+        return [indent + marker + lines[0], ...lines.slice(1).map(line => (line.length > 0 ? this.indent(depth + 1) + line : ""))]
       }
       case "AST_HTML_COMMENT_NODE": return this.comment(node as Nodes.HTMLCommentNode, depth)
       case "AST_HTML_DOCTYPE_NODE": {

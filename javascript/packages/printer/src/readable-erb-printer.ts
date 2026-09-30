@@ -1,6 +1,6 @@
 import { isInlineElement, isParseResult, isVoidElement } from "@herb-tools/core"
 
-import { codeLines, dedent, erbCode, erbOpening, isERBOutput, isERBTag } from "./erb-tags.js"
+import { codeLines, dedent, erbCode, erbOpening, flowsInline, isERBOutput, isERBTag, isRepeatedBlock } from "./erb-tags.js"
 import { diagnosticAt } from "./conversion-diagnostic.js"
 
 import type * as Nodes from "@herb-tools/core"
@@ -54,6 +54,8 @@ export class ReadableERBPrinter {
     const children = node.type === "AST_DOCUMENT_NODE" ? (node as Nodes.DocumentNode).children : [node]
     const lines = this.attachWhitespace(this.block(children, 0))
 
+    this.warnings.sort((a, b) => a.line - b.line || a.column - b.column)
+
     return lines.length > 0 ? lines.join("\n") + "\n" : ""
   }
 
@@ -102,27 +104,26 @@ export class ReadableERBPrinter {
     return isInlineElement(name)
   }
 
-  private block(nodes: Node[], depth: number): string[] {
-    const lines: string[] = []
-    let run: Node[] = []
+  private block(nodes: Node[], depth: number, repeated = false): string[] {
+    const entries: ({ kind: "run", nodes: Node[] } | { kind: "node", node: Node })[] = []
     let previous: Node | null = null
-
-    const flush = () => {
-      if (run.length === 0) return
-
-      lines.push(...this.runLines(run, depth))
-      run = []
-    }
 
     for (const node of nodes) {
       if (node.type === "AST_WHITESPACE_NODE") continue
 
+      const last = entries[entries.length - 1]
+
       if (this.isInlineItem(node)) {
-        if (run.length === 0 && previous && this.isInlineLevel(previous) && !this.startsWithWhitespace(node)) {
+        if (last?.kind !== "run" && previous && this.isInlineLevel(previous) && !this.startsWithWhitespace(node)) {
           this.warnWhitespace(node)
         }
 
-        run.push(node)
+        if (last?.kind === "run") {
+          last.nodes.push(node)
+        } else {
+          entries.push({ kind: "run", nodes: [node] })
+        }
+
         previous = node
         continue
       }
@@ -131,14 +132,44 @@ export class ReadableERBPrinter {
         this.warnWhitespace(node)
       }
 
-      flush()
-      lines.push(...this.blockNode(node, depth))
+      entries.push({ kind: "node", node })
       previous = node
     }
 
-    flush()
+    const lines: string[] = []
+
+    entries.forEach((entry, index) => {
+      if (entry.kind === "node") {
+        lines.push(...this.blockNode(entry.node, depth))
+        return
+      }
+
+      // The line break next to an inline element renders as a space already (`<code>x</code>` + newline + `and`),
+      // and so do the line breaks at the ends of a loop body whose ends are inline (between the iterations).
+      const neighbour = (other: (typeof entries)[number] | undefined) => other?.kind === "node" && flowsInline(other.node)
+      const loopEdge = repeated && this.flowingEdges(entries)
+
+      lines.push(...this.runLines(
+        entry.nodes,
+        depth,
+        neighbour(entries[index - 1]) || (loopEdge && index === 0),
+        neighbour(entries[index + 1]) || (loopEdge && index === entries.length - 1),
+      ))
+    })
 
     return lines
+  }
+
+  // Whether the first and the last content of a body flow inline (text, output, inline elements).
+  private flowingEdges(entries: ({ kind: "run", nodes: Node[] } | { kind: "node", node: Node })[]): boolean {
+    const flows = (entry: (typeof entries)[number] | undefined) => {
+      if (!entry) return false
+      if (entry.kind === "node") return flowsInline(entry.node)
+
+      return entry.nodes.some(node => isERBOutput(node) || this.inline(node).trim() !== "")
+    }
+
+    return flows(entries[0]) && flows(entries[entries.length - 1])
   }
 
   private startsWithWhitespace(node: Node): boolean {
@@ -159,9 +190,21 @@ export class ReadableERBPrinter {
     )
   }
 
-  // Text and ERB output that belong together, on one line (or several, for text with line breaks).
-  private runLines(run: Node[], depth: number): string[] {
-    const text = run.map(node => this.inline(node)).join("")
+  // Text and ERB output that belong together, on one line (or several, for text with line breaks). The
+  // whitespace at an end that is next to an inline element is left to the line break (`afterInline` /
+  // `beforeInline`), which renders the same.
+  private runLines(run: Node[], depth: number, afterInline = false, beforeInline = false): string[] {
+    let text = run.map(node => this.inline(node)).join("")
+
+    if (this.rawTextDepth === 0) {
+      if (text.trim() === "") {
+        if (afterInline && beforeInline) return []
+      } else {
+        if (afterInline) text = text.replace(/^[ \t]+/, "")
+        if (beforeInline) text = text.replace(/[ \t]+$/, "")
+      }
+    }
+
     const leading = text.match(/^[ \t]*/)![0]
     const rest = text.slice(leading.length)
     const lines: string[] = []
@@ -198,7 +241,7 @@ export class ReadableERBPrinter {
         this.warnRepeatedWhitespace(block, block.body ?? [])
         return [
           ...this.tagLines(block, depth),
-          ...this.block(block.body ?? [], depth + 1),
+          ...this.block(block.body ?? [], depth + 1, isRepeatedBlock(block)),
           ...(block.rescue_clause ? this.rescueLines(block.rescue_clause, depth) : []),
           ...(block.else_clause ? this.clauseLines(block.else_clause, depth) : []),
           ...(block.ensure_clause ? this.clauseLines(block.ensure_clause, depth) : []),
@@ -232,7 +275,7 @@ export class ReadableERBPrinter {
       case "AST_ERB_FOR_NODE": {
         const loop = node as Nodes.ERBWhileNode
         this.warnRepeatedWhitespace(loop, loop.statements)
-        return [...this.tagLines(loop, depth), ...this.block(loop.statements, depth + 1), ...this.endLines(loop.end_node, depth)]
+        return [...this.tagLines(loop, depth), ...this.block(loop.statements, depth + 1, true), ...this.endLines(loop.end_node, depth)]
       }
       case "AST_ERB_CONTENT_NODE":
       case "AST_ERB_YIELD_NODE":
@@ -264,6 +307,8 @@ export class ReadableERBPrinter {
     const last = content[content.length - 1]
 
     if (!first || !(this.isInlineLevel(first) || this.isInlineLevel(last))) return
+    // the source renders whitespace between the iterations too
+    if (this.startsWithWhitespace(first) || this.endsWithWhitespace(last)) return
 
     this.warnings.push(
       diagnosticAt(
@@ -462,7 +507,7 @@ export class ReadableERBPrinter {
       diagnosticAt(
         outputs[0],
         "dynamic-attribute",
-        `\`${name}=${code}\`: Slim omits the attribute when the value is nil or false and renders a bare \`${name}\` when it is true; the ERB always renders \`${name}="…"\`.`,
+        `\`${name}=${code}\`: Slim omits the attribute when the value is nil or false and renders a bare \`${name}\` when it is true; the ERB always renders \`${name}="…"\`${code.includes("\n") ? "" : ` (converted back to Slim, it is \`${name}="#{${code}}"\`)`}.`,
       ),
     )
   }

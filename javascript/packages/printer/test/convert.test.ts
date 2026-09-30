@@ -103,12 +103,12 @@ describe("Slim <=> HTML+ERB conversion", () => {
         <style>p { color: red; }</style>
       </div>
     `)).toBe(dedent`
-      .card.wide class=extra id="main"
+      .card.wide class="#{extra}" id="main"
         - if admin
           p = post.body
         - else
           p Hello <b>#{name}</b>!
-        a href=post_path(post) title="Post #{post.title}" Read
+        a> href="#{post_path(post)}" title="Post #{post.title}" Read
         input(type="checkbox" checked)
         /! note
         - case status
@@ -165,6 +165,266 @@ describe("Slim <=> HTML+ERB conversion", () => {
     ]
 
     for (const template of templates) roundTrip(template)
+  })
+
+  test("keeps the spaces the line breaks around inline elements render", () => {
+    // text that ends a line before an inline element, and text that starts a line after one
+    expect(toSlim(dedent`
+      <p>
+        The corner comes from
+        <code>herb:state</code>. Changing it re-places the stack.
+      </p>
+      <p>
+        The template only ever sees <code>panel</code>
+        and <code>height</code>, both plain state.
+      </p>
+    `)).toBe(dedent`
+      p
+        ' The corner comes from
+        code herb:state
+        | . Changing it re-places the stack.
+      p
+        ' The template only ever sees
+        code> panel
+        ' and
+        code height
+        | , both plain state.
+    ` + "\n")
+
+    // between inline elements and output: `>` / `<` markers
+    expect(toSlim(dedent`
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <%= link_to "Docs", docs_path %>
+        <span>!</span>
+      </nav>
+    `)).toBe(dedent`
+      nav
+        a> href="/" Home
+        a> href="/about" About
+        => link_to "Docs", docs_path
+        span !
+    ` + "\n")
+
+    // block elements and the ends of an element's content don't render the line breaks
+    expect(toSlim(dedent`
+      <div>
+        Intro
+        <div>Block</div>
+        <code>x</code>
+      </div>
+    `)).toBe(dedent`
+      div
+        | Intro
+        div Block
+        code x
+    ` + "\n")
+  })
+
+  test("the whitespace around inline elements survives the round trip", () => {
+    const { erb1, slim2 } = roundTrip(dedent`
+      p
+        ' The corner comes from
+        code> herb:state
+        | changes it.
+      p
+        code panel
+        |  and
+        code height
+      p
+        a> href="/" Home
+        a href="/about" About
+    `)
+
+    expect(erb1).toBe(dedent`
+      <p>
+        The corner comes from
+        <code>herb:state</code>
+        changes it.
+      </p>
+      <p>
+        <code>panel</code>
+        and
+        <code>height</code>
+      </p>
+      <p>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+      </p>
+    ` + "\n")
+
+    expect(slim2).toBe(dedent`
+      p
+        ' The corner comes from
+        code> herb:state
+        | changes it.
+      p
+        code> panel
+        ' and
+        code height
+      p
+        a> href="/" Home
+        a href="/about" About
+    ` + "\n")
+  })
+
+  test("prints ERB output on its own lines as one `=` line per output", () => {
+    // whitespace between elements in <head> doesn't render
+    expect(toSlim(dedent`
+      <head>
+        <%= csrf_meta_tags %>
+        <%= csp_meta_tag %>
+      </head>
+    `)).toBe(dedent`
+      head
+        = csrf_meta_tags
+        = csp_meta_tag
+    ` + "\n")
+
+    // elsewhere the line break renders as a space: `=>`
+    expect(toSlim(dedent`
+      <div>
+        <%= render "a" %>
+        <%= render "b" %>
+      </div>
+      <a href="/">
+        <%= image_tag "logo.png" %>
+
+        Home
+      </a>
+      <p><%= first %><%= second %> <%== third %></p>
+    `)).toBe(dedent`
+      div
+        => render "a"
+        = render "b"
+      a href="/"
+        => image_tag "logo.png"
+        | Home
+      p
+        = first
+        => second
+        == third
+    ` + "\n")
+
+    // text around output on the same line stays a text block
+    expect(toSlim(dedent`
+      <p>
+        Hello <%= name %>,
+        welcome back
+      </p>
+    `)).toBe(dedent`
+      p
+        | Hello #{name},
+          welcome back
+    ` + "\n")
+
+    roundTrip(dedent`
+      head
+        = csrf_meta_tags
+        = csp_meta_tag
+      div
+        => render "a"
+        = render "b"
+      p
+        | #{first}#{second}
+    `)
+  })
+
+  test("keeps the whitespace between the iterations of a loop", () => {
+    expect(toSlim(dedent`
+      <p>
+        <% tags.each do |tag| %>
+          <%= link_to tag.name, tag %>
+        <% end %>
+      </p>
+      <ul>
+        <% items.each do |item| %>
+          <li><%= item %></li>
+        <% end %>
+      </ul>
+    `)).toBe(dedent`
+      p
+        - tags.each do |tag|
+          => link_to tag.name, tag
+      ul
+        - items.each do |item|
+          li = item
+    ` + "\n")
+
+    roundTrip(dedent`
+      p
+        - tags.each do |tag|
+          = link_to tag.name, tag
+        - 3.times do
+          ' Hey!
+    `)
+  })
+
+  test("prints ERB attribute values as a `#{}` interpolation, which renders the same", () => {
+    const result = convertERBToSlim(Herb, dedent`
+      <a href="<%= url %>" class="<%= classes %>" data-open="<%= panel %>" tabindex="<%= -1 %>" data-kind="<%= :note %>">Link</a>
+      <input checked="<%= true %>" disabled="<%= false %>" aria-hidden="<%= true %>">
+    `)
+
+    expect(result.output).toBe(dedent`
+      a> href="#{url}" class="#{classes}" data-open="#{panel}" tabindex=-1 data-kind=:note Link
+      input checked=true disabled="#{false}" aria-hidden="#{true}"
+    ` + "\n")
+
+    expect(result.warnings).toEqual([])
+
+    // Slim's `attr=code` becomes `attr="<%= code %>"` in ERB (with a warning), and `attr="#{code}"` in Slim again
+    const { erb1, slim2 } = roundTrip(dedent`
+      a href=@url Link
+      div class=classes data-open=panel
+      input checked=true
+    `)
+
+    expect(erb1).toBe(dedent`
+      <a href="<%= @url %>">Link</a>
+      <div class="<%= classes %>" data-open="<%= panel %>"></div>
+      <input checked>
+    ` + "\n")
+
+    expect(slim2).toBe(dedent`
+      a href="#{@url}" Link
+      div class="#{classes}" data-open="#{panel}"
+      input(checked)
+    ` + "\n")
+  })
+
+  test("idiomaticAttributes prints `attr=code` and reports the difference", () => {
+    const result = convertERBToSlim(Herb, `<a href="<%= url %>" class="<%= classes %>" tabindex="<%= 1 %>">Link</a>`, { idiomaticAttributes: true })
+
+    expect(result.output).toBe(`a href=url class=classes tabindex=1 Link\n`)
+    expect(result.warnings.map(warning => `${warning.line}:${warning.column} ${warning.kind}`)).toEqual([
+      "1:9 dynamic-attribute",
+      "1:28 dynamic-class",
+    ])
+    expect(result.warnings[0].message).toContain("changes what renders")
+
+    roundTrip(`a href=@url class=classes Link`, { idiomaticAttributes: true })
+  })
+
+  test("prints strict locals as `/# locals:`", () => {
+    expect(toSlim(dedent`
+      <%# locals: (album:, size: :small) %>
+      <%# a note %>
+      <p><%= album.title %></p>
+    `)).toBe(dedent`
+      /# locals: (album:, size: :small)
+      / a note
+      p = album.title
+    ` + "\n")
+
+    const { erb1, slim2 } = roundTrip(dedent`
+      /# locals: (album:)
+      p = album.title
+    `)
+
+    expect(erb1).toBe("<%# locals: (album:) %>\n<p><%= album.title %></p>\n")
+    expect(slim2).toBe("/# locals: (album:)\np = album.title\n")
   })
 
   test("prints configured shortcuts back", () => {

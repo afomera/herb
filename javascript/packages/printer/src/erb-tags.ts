@@ -1,3 +1,5 @@
+import { isInlineElement } from "@herb-tools/core"
+
 import type { Node, Token } from "@herb-tools/core"
 
 type ERBTagLike = Node & { tag_opening?: Token | null, content?: Token | null, tag_closing?: Token | null }
@@ -68,4 +70,45 @@ export function dedent(lines: string[]): string[] {
   const common = indents.length > 0 ? Math.min(...indents) : 0
 
   return lines.map(line => line.slice(Math.min(common, line.match(/^[ \t]*/)![0].length)))
+}
+
+// Phrasing elements that flow with the text around them (`br`, `hr` and `wbr` break the line, so the whitespace
+// around them doesn't render).
+const LINE_BREAKING = new Set(["br", "hr", "wbr"])
+
+/**
+ * Whether whitespace next to this node renders: text, single-line ERB output and inline elements (`<code>`,
+ * `<a>`, ...) flow inline, so a line break between two of them renders as a space.
+ */
+export function flowsInline(node: Node | null | undefined): boolean {
+  if (!node) return false
+  if (node.type === "AST_HTML_TEXT_NODE" || node.type === "AST_LITERAL_NODE") return true
+  if (isERBOutput(node)) return !erbCode(node).includes("\n")
+  if (node.type !== "AST_HTML_ELEMENT_NODE") return false
+
+  const name = ((node as Node & { tag_name?: Token | null }).tag_name?.value ?? "").toLowerCase()
+
+  return isInlineElement(name) && !LINE_BREAKING.has(name)
+}
+
+const ITERATION = /\.(each\w*|times|upto|downto|step|find_each|find_in_batches|cycle)\b|^\s*loop\b/
+
+/**
+ * Whether the body of an ERB block can render more than once (`each do`, `times do`, `while`, ...): the whitespace
+ * at the ends of its body then renders between the iterations.
+ */
+export function isRepeatedBlock(node: Node | null | undefined): boolean {
+  if (!node) return false
+
+  switch (node.type) {
+    case "AST_ERB_ITERATION_BLOCK_NODE":
+    case "AST_ERB_WHILE_NODE":
+    case "AST_ERB_UNTIL_NODE":
+    case "AST_ERB_FOR_NODE":
+      return true
+    case "AST_ERB_BLOCK_NODE":
+      return ITERATION.test(erbCode(node as ERBTagLike))
+    default:
+      return false
+  }
 }

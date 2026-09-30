@@ -21,6 +21,11 @@ export interface ConvertOptions {
   slimParserOptions?: ParseOptions
   /** Parser options for the ERB side, e.g. `parserOptionsForLanguage("erb", config)`. */
   erbParserOptions?: ParseOptions
+  /**
+   * ERB => Slim: print `attr="<%= code %>"` as Slim's idiomatic `attr=code` (which omits the attribute for nil
+   * and false, and renders it bare for true) instead of the equivalent `attr="#{code}"`, with a warning for each.
+   */
+  idiomaticAttributes?: boolean
 }
 
 export interface ConversionResult {
@@ -78,6 +83,7 @@ export function convertERBToSlim(herb: ConversionParser, source: string, options
     indentWidth: options.indentWidth,
     shortcuts: slim.slim_shortcuts,
     mergeAttrs: slim.slim_merge_attrs,
+    idiomaticAttributes: options.idiomaticAttributes,
     parse: html => herb.parse(html, erbOptions),
   })
 
