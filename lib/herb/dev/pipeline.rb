@@ -44,7 +44,7 @@ module Herb
       #: (Hash[String, String]) -> Array[String]
       def remember_broken(sources)
         sources.each do |file, source|
-          errors = Herb.parse(source, strict: true, analyze: true).errors
+          errors = Herb.parse(source, strict: true, analyze: true, **@classifier.parser_options_for(file)).errors
 
           next if errors.empty?
 
@@ -111,8 +111,7 @@ module Herb
 
       #: (Watcher::Event) -> void
       def handle_changed(event)
-        event.relative_path
-        classification = @classifier.call(event.previous.to_s, event.current.to_s)
+        classification = @classifier.call(event.previous.to_s, event.current.to_s, event.relative_path)
 
         case classification.kind
         when :parse_error
@@ -139,6 +138,9 @@ module Herb
 
       #: (Watcher::Event, Classifier::Classification) -> void
       def handle_content_change(event, classification)
+        # The host compiler builds slot schemas, which only exist for ERB templates.
+        return handle_without_compiler(event, classification) unless TemplateLanguage.erb?(event.relative_path)
+
         compiler = @compiler.call
 
         return handle_without_compiler(event, classification) unless compiler

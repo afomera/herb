@@ -99,5 +99,28 @@ module Dev
 
       assert_equal :dynamic, classification.kind
     end
+
+    test "a Slim template is parsed as Slim, and a parse error points at its Slim line" do
+      classification = Herb::Dev::Classifier.new.call("p Hi\n", "div\n  p Hi\na(href=\"x\"\n", "app/views/a.html.slim")
+
+      assert_equal :parse_error, classification.kind
+      assert_equal 3, classification.errors.first.location.start.line
+    end
+
+    test "any edit to a Slim template that parses is :dynamic" do
+      classifier = Herb::Dev::Classifier.new
+
+      assert_equal :dynamic, classifier.call("p Hi\n", "p Hello\n", "app/views/a.html.slim").kind
+      assert_equal :none, classifier.call("p Hi\n", "p Hi\n", "app/views/a.html.slim").kind
+    end
+
+    test "Slim templates parse with the project's Slim settings" do
+      configuration = Herb::Configuration.new(nil)
+      options = Herb::Dev::Classifier.new(configuration: configuration).parser_options_for("app/views/a.html.slim")
+
+      assert_equal "slim", options[:language]
+      assert_equal configuration.slim_parser_options[:slim_shortcuts], options[:slim_shortcuts]
+      assert_equal({}, Herb::Dev::Classifier.new(configuration: configuration).parser_options_for("app/views/a.html.erb"))
+    end
   end
 end

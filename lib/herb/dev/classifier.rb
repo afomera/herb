@@ -2,6 +2,8 @@
 # typed: true
 
 require_relative "../../herb"
+require_relative "../configuration"
+require_relative "../template_language"
 
 module Herb
   module Dev
@@ -19,6 +21,10 @@ module Herb
     # The diff parses without the configured ERB openers, so a custom opener reads as text on
     # both sides and its edits would pass the patchable check. With openers configured, no
     # change classifies better than `:dynamic`.
+    #
+    # A Slim template is parsed as Slim, with the project's Slim settings, so its parse errors point
+    # at Slim lines. `Herb.diff` only diffs HTML+ERB, so any edit to a Slim template that still
+    # parses is `:dynamic`, and browsers refetch or reload the page that rendered it.
     #
     class Classifier
       PATCHABLE_TYPES = ["text_changed", "attribute_value_changed", "attribute_added", "attribute_removed"].freeze #: Array[String]
@@ -43,11 +49,23 @@ module Herb
 
       #: (?configuration: Herb::Configuration?) -> void
       def initialize(configuration: nil)
+        @configuration = configuration
         @parser_options = configuration&.parser_options || {} #: Hash[Symbol, untyped]
       end
 
-      #: (String, String) -> Classification
-      def call(previous, current)
+      # The options a template at `path` is parsed with: the project's parser options, and for a
+      # template that isn't ERB its language and settings.
+      #: (String?) -> Hash[Symbol, untyped]
+      def parser_options_for(path)
+        return @parser_options if path.nil? || TemplateLanguage.erb?(path)
+
+        (@configuration || Herb::Configuration.default).parser_options_for_path(path)
+      end
+
+      #: (String, String, ?String?) -> Classification
+      def call(previous, current, path = nil)
+        return call_without_diff(previous, current, path) unless path.nil? || TemplateLanguage.erb?(path)
+
         parse = Herb.parse(current, strict: true, analyze: true, **@parser_options)
 
         return classification(:parse_error, errors: parse.errors) if parse.errors.any?
@@ -67,6 +85,16 @@ module Herb
       end
 
       private
+
+      #: (String, String, String) -> Classification
+      def call_without_diff(previous, current, path)
+        parse = Herb.parse(current, strict: true, analyze: true, **parser_options_for(path))
+
+        return classification(:parse_error, errors: parse.errors) if parse.errors.any?
+        return classification(:none) if previous == current
+
+        classification(:dynamic)
+      end
 
       #: (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification
       def classification(kind, operations: [], node_path: [], errors: [])

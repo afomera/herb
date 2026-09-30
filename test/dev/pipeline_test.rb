@@ -276,5 +276,42 @@ module Dev
 
       assert_equal({ type: "asset", kind: "script", file: "app/assets/builds/application.js" }, server.messages.first.first)
     end
+
+    test "a Slim change never reaches the host compiler, and browsers refetch" do
+      server = FakeServer.new
+      compiled_files = []
+
+      compiler = lambda do |_source, path|
+        compiled_files << path
+        compiled
+      end
+
+      pipeline(server, compiler: compiler).handle_event(
+        event(:changed, "a.html.slim", "p Hi\n", "p Hello\n")
+      )
+
+      message, = server.messages.first
+
+      assert_empty compiled_files
+      assert_equal "invalidate", message[:type]
+      assert_equal "fetch", message[:scope]
+    end
+
+    test "a Slim parse error broadcasts an error message" do
+      server = FakeServer.new
+
+      pipeline(server).handle_event(event(:changed, "a.html.slim", "p Hi\n", "a(href=\"x\"\n"))
+
+      message, = server.messages.first
+
+      assert_equal "error", message[:type]
+      assert_equal 1, message[:errors].first[:line]
+    end
+
+    test "broken Slim templates are remembered by parsing them as Slim" do
+      subject = pipeline(FakeServer.new)
+
+      assert_equal ["b.html.slim"], subject.remember_broken("a.html.slim" => "p Hi\n", "b.html.slim" => "a(href=\"x\"\n")
+    end
   end
 end

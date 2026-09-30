@@ -266,5 +266,19 @@ module Dev
         assert_empty events
       end
     end
+
+    test "Slim templates are indexed and watched like ERB" do
+      with_watcher do |root, watcher, events|
+        path = write(root, "app/views/posts/index.html.slim", "p Hi\n")
+
+        assert_equal 1, watcher.index
+
+        write(root, "app/views/posts/index.html.slim", "p Hello\n")
+        watcher.send(:handle, RawEvent.new("modified", path))
+
+        assert_equal [:changed], events.map(&:kind)
+        assert_equal "app/views/posts/index.html.slim", events.first.relative_path
+      end
+    end
   end
 end

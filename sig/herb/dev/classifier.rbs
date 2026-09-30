@@ -16,6 +16,10 @@ module Herb
     # The diff parses without the configured ERB openers, so a custom opener reads as text on
     # both sides and its edits would pass the patchable check. With openers configured, no
     # change classifies better than `:dynamic`.
+    #
+    # A Slim template is parsed as Slim, with the project's Slim settings, so its parse errors point
+    # at Slim lines. `Herb.diff` only diffs HTML+ERB, so any edit to a Slim template that still
+    # parses is `:dynamic`, and browsers refetch or reload the page that rendered it.
     class Classifier
       PATCHABLE_TYPES: Array[String]
 
@@ -42,10 +46,18 @@ module Herb
       # : (?configuration: Herb::Configuration?) -> void
       def initialize: (?configuration: Herb::Configuration?) -> void
 
-      # : (String, String) -> Classification
-      def call: (String, String) -> Classification
+      # The options a template at `path` is parsed with: the project's parser options, and for a
+      # template that isn't ERB its language and settings.
+      # : (String?) -> Hash[Symbol, untyped]
+      def parser_options_for: (String?) -> Hash[Symbol, untyped]
+
+      # : (String, String, ?String?) -> Classification
+      def call: (String, String, ?String?) -> Classification
 
       private
+
+      # : (String, String, String) -> Classification
+      def call_without_diff: (String, String, String) -> Classification
 
       # : (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification
       def classification: (Symbol, ?operations: Array[Herb::Diff::Operation], ?node_path: Array[Integer], ?errors: Array[Herb::Errors::Error]) -> Classification
