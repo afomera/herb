@@ -190,6 +190,8 @@ export class HTMLNoSpaceInTagRule extends ParserRule<HTMLNoSpaceInTagAutofixCont
   static ruleName = "html-no-space-in-tag"
   static introducedIn = this.version("0.8.0")
   static defaultEnabledIn = this.version("0.10.3")
+  // Whitespace inside a tag is HTML source formatting, and a Slim template has no HTML tags.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

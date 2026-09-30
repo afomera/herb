@@ -73,6 +73,8 @@ class PreferExplicitConditionalsVisitor extends BaseRuleVisitor<PreferExplicitCo
 export class ERBPreferExplicitConditionalsRule extends ParserRule<PreferExplicitConditionalsAutofixContext> {
   static ruleName = "erb-prefer-explicit-conditionals"
   static introducedIn = this.version("0.11.0")
+  // Slim synthesizes every ERB tag, so an inline condition can't be told apart from a block, and the fix prints ERB.
+  static languages = ["erb"] as const
   static autocorrectable = true
 
   get defaultConfig(): FullRuleConfig {

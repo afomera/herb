@@ -52,6 +52,8 @@ export class ActionViewStrictLocalsFirstLineRule extends ParserRule {
   static autocorrectable = true
   static ruleName = "actionview-strict-locals-first-line"
   static introducedIn = this.version("0.9.3")
+  // A Slim comment renders nothing, so there is no newline after the declaration to keep apart.
+  static languages = ["erb"] as const
 
   get parserOptions() {
     return { strict_locals: true }

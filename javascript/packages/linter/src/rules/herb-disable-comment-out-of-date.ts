@@ -16,6 +16,9 @@ export class HerbDisableCommentOutOfDateRule extends SourceRule<HerbDisableComme
   static ruleName = "herb-disable-comment-out-of-date"
   static introducedIn = this.version("0.11.0")
   static defaultEnabledIn = this.version("0.11.0")
+  // Counts are read from `/ herb:disable` comments in Slim, and the fix only rewrites the count inside the comment.
+  static languages = ["erb", "slim"] as const
+  static autofixLanguages = ["erb", "slim"] as const
   static autocorrectable = true
 
   get defaultConfig(): FullRuleConfig {

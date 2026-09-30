@@ -37,6 +37,8 @@ export class HTMLAttributeEqualsSpacingRule extends ParserRule<AttributeEqualsSp
   static ruleName = "html-attribute-equals-spacing"
   static introducedIn = this.version("0.6.0")
   static defaultEnabledIn = this.version("0.6.0")
+  // Spacing around `=` is HTML source formatting, and a Slim attribute is Slim syntax.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

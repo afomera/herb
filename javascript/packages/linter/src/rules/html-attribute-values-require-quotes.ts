@@ -55,6 +55,8 @@ export class HTMLAttributeValuesRequireQuotesRule extends ParserRule<AttributeVa
   static ruleName = "html-attribute-values-require-quotes"
   static introducedIn = this.version("0.4.0")
   static defaultEnabledIn = this.version("0.4.0")
+  // An unquoted Slim attribute value is a Ruby expression, not an unquoted HTML value.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

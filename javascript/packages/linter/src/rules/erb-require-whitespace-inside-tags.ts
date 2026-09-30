@@ -121,6 +121,8 @@ export class ERBRequireWhitespaceRule extends ParserRule<CommentedERBTagAutofixC
   static ruleName = "erb-require-whitespace-inside-tags"
   static introducedIn = this.version("0.4.0")
   static defaultEnabledIn = this.version("0.4.0")
+  // Whitespace inside `<% %>` is ERB tag syntax, which a Slim template doesn't have.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

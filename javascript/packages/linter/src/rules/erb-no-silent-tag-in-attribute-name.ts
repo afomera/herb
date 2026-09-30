@@ -30,6 +30,8 @@ export class ERBNoSilentTagInAttributeNameRule extends ParserRule {
   static ruleName = "erb-no-silent-tag-in-attribute-name"
   static introducedIn = this.version("0.6.0")
   static defaultEnabledIn = this.version("0.6.0")
+  // A Slim template can't put a silent tag into an attribute name.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

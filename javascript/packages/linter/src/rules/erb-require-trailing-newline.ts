@@ -27,6 +27,9 @@ export class ERBRequireTrailingNewlineRule extends SourceRule {
   static ruleName = "erb-require-trailing-newline"
   static introducedIn = this.version("0.8.0")
   static defaultEnabledIn = this.version("0.8.0")
+  // Trailing newlines mean the same in Slim, and fixing them only touches the end of the file.
+  static languages = ["erb", "slim"] as const
+  static autofixLanguages = ["erb", "slim"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

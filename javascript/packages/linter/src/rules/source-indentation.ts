@@ -37,6 +37,8 @@ export class SourceIndentationRule extends SourceRule {
   static ruleName = "source-indentation"
   static introducedIn = this.version("0.9.3")
   static defaultEnabledIn = this.version("0.9.3")
+  // Tabs mixed into indentation are just as wrong in Slim. The fix re-indents the whole file, which can change how Slim nests it, so it stays ERB-only.
+  static languages = ["erb", "slim"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

@@ -47,6 +47,8 @@ export class HTMLAttributeDoubleQuotesRule extends ParserRule<AttributeDoubleQuo
   static ruleName = "html-attribute-double-quotes"
   static introducedIn = this.version("0.4.0")
   static defaultEnabledIn = this.version("0.4.0")
+  // Quote style is HTML source formatting. Slim prints its own quotes, and single quotes in Slim source are Slim syntax.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

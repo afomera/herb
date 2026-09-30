@@ -82,6 +82,8 @@ export class ERBStrictLocalsRequiredRule extends ParserRule<StrictLocalsRequired
   static unsafeAutocorrectable = true
   static ruleName = "erb-strict-locals-required"
   static introducedIn = this.version("0.8.8")
+  // Rails reads a Slim partial's strict locals from a `/# locals: (...)` comment, which the Slim parser doesn't recognize yet, so this would flag every Slim partial.
+  static languages = ["erb"] as const
 
   get parserOptions() {
     return {

@@ -39,6 +39,8 @@ export class ERBNoOutputInAttributePositionRule extends ParserRule {
   static ruleName = "erb-no-output-in-attribute-position"
   static introducedIn = this.version("0.9.0")
   static defaultEnabledIn = this.version("0.9.0")
+  // Slim's attribute splat (`*{}`) is its idiomatic way to output attributes, and it's the only way to get output in attribute position.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

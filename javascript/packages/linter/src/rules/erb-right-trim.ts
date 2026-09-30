@@ -29,6 +29,8 @@ export class ERBRightTrimRule extends ParserRule<ERBRightTrimAutofixContext> {
   static ruleName = "erb-right-trim"
   static introducedIn = this.version("0.7.5")
   static defaultEnabledIn = this.version("0.7.5")
+  // `-%>` and `=%>` are ERB tag syntax, which a Slim template doesn't have.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

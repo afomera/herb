@@ -36,6 +36,8 @@ export class ERBNoCommentedOutOutputTagsRule extends ParserRule {
   static ruleName = "erb-no-commented-out-output-tags"
   static introducedIn = this.version("0.10.3")
   static defaultEnabledIn = this.version("0.10.3")
+  // `<%#=` is ERB tag syntax, which a Slim template doesn't have.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

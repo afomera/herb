@@ -25,6 +25,8 @@ export class ERBNoOutputInAttributeNameRule extends ParserRule {
   static ruleName = "erb-no-output-in-attribute-name"
   static introducedIn = this.version("0.9.0")
   static defaultEnabledIn = this.version("0.9.0")
+  // A Slim template can't output into an attribute name, and splats (`*{}`) parse into a synthesized one.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

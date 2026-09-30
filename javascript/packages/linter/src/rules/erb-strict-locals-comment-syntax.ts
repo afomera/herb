@@ -499,6 +499,8 @@ export class ERBStrictLocalsCommentSyntaxRule extends ParserRule<ERBStrictLocals
   static ruleName = "erb-strict-locals-comment-syntax"
   static introducedIn = this.version("0.8.8")
   static defaultEnabledIn = this.version("0.8.8")
+  // Rails reads a Slim partial's strict locals from a `/# locals: (...)` comment, which the Slim parser doesn't recognize yet, and the suggestions are ERB.
+  static languages = ["erb"] as const
 
   get parserOptions() {
     return {

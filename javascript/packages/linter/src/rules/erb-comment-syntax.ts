@@ -43,6 +43,8 @@ export class ERBCommentSyntax extends ParserRule<ERBCommentSyntaxAutofixContext>
   static ruleName = "erb-comment-syntax"
   static introducedIn = this.version("0.7.5")
   static defaultEnabledIn = this.version("0.7.5")
+  // `<% #` versus `<%#` is ERB tag syntax, which a Slim template doesn't have.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

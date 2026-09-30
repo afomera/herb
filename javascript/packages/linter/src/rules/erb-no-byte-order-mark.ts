@@ -24,6 +24,9 @@ export class ERBNoByteOrderMarkRule extends SourceRule {
   static ruleName = "erb-no-byte-order-mark"
   static introducedIn = this.version("0.11.0")
   static defaultEnabledIn = this.version("0.11.0")
+  // A byte order mark is just as stray in a Slim file, and removing it doesn't touch the template.
+  static languages = ["erb", "slim"] as const
+  static autofixLanguages = ["erb", "slim"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

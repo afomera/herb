@@ -30,6 +30,9 @@ class BooleanAttributesNoValueVisitor extends AttributeVisitorMixin<BooleanAttri
   }
 
   protected checkStaticAttributeDynamicValue({ originalAttributeName, attributeNode }: StaticAttributeDynamicValueParams) {
+    // Slim renders `checked=user.admin?` as a bare `checked` when the value is true and leaves the
+    // attribute out when it's false or nil, so a Ruby value is how Slim spells a boolean attribute.
+    if (this.context.language === "slim") return
     if (this.bindsDeclaredState(attributeNode)) return
 
     this.checkAttribute(originalAttributeName, attributeNode)

@@ -207,6 +207,8 @@ export class ERBClosingTagIndentRule extends ParserRule<ClosingErbTagIndentAutof
   static ruleName = "erb-closing-tag-indent"
   static introducedIn = this.version("0.11.0")
   static defaultEnabledIn = this.version("0.11.0")
+  // Where `%>` sits is ERB tag syntax, which a Slim template doesn't have.
+  static languages = ["erb"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {

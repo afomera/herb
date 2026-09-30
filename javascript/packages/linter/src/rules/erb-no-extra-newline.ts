@@ -45,6 +45,9 @@ export class ERBNoExtraNewLineRule extends SourceRule {
   static ruleName = "erb-no-extra-newline"
   static introducedIn = this.version("0.8.0")
   static defaultEnabledIn = this.version("0.8.0")
+  // Blank lines mean the same in Slim, and removing extra ones never changes indentation.
+  static languages = ["erb", "slim"] as const
+  static autofixLanguages = ["erb", "slim"] as const
 
   get defaultConfig(): FullRuleConfig {
     return {
