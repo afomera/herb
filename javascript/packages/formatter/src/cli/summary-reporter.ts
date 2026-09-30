@@ -22,7 +22,8 @@ export interface SummaryData {
 const SKIP_LABELS: Record<FormatSkipReason, string> = {
   "parse-errors": "with parse errors",
   "scaffold": "scaffold templates",
-  "ignore-directive": "with herb:formatter ignore"
+  "ignore-directive": "with herb:formatter ignore",
+  "unsupported-language": "Slim templates (not supported yet)"
 }
 
 export class SummaryReporter {
@@ -38,6 +39,17 @@ export class SummaryReporter {
     const skipped = data.skippedFiles
 
     if (skipped.length === 0) return
+
+    const unsupported = skipped.filter(file => file.reason === "unsupported-language")
+
+    if (unsupported.length > 0) {
+      console.log("")
+      console.log(` ${colorize("Skipped:", "bold")} ${colorize(`${unsupported.length} Slim ${this.pluralize(unsupported.length, "template")} left unchanged. The formatter only formats HTML+ERB, formatting Slim isn't supported yet`, "gray")}`)
+
+      for (const file of unsupported) {
+        console.log(`  ${colorize("-", "gray")} ${colorize(file.path, "cyan")}`)
+      }
+    }
 
     const parseErrors = this.parseErrorFiles(data)
 

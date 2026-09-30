@@ -1,6 +1,6 @@
 import { FormatPrinter } from "./format-printer.js"
 import { convertIndentation } from "@herb-tools/printer"
-import { BYTE_ORDER_MARK } from "@herb-tools/core"
+import { BYTE_ORDER_MARK, languageForPath } from "@herb-tools/core"
 
 import { isScaffoldTemplate } from "./scaffold-template-detector.js"
 import { resolveFormatOptions } from "./options.js"
@@ -11,7 +11,7 @@ import type { RewriteContext } from "@herb-tools/rewriter"
 import type { HerbBackend, ParseResult, ParseOptions } from "@herb-tools/core"
 import type { FormatOptions } from "./options.js"
 
-export type FormatSkipReason = "parse-errors" | "scaffold" | "ignore-directive"
+export type FormatSkipReason = "parse-errors" | "scaffold" | "ignore-directive" | "unsupported-language"
 
 export interface FormatResult {
   output: string
@@ -67,6 +67,14 @@ export class Formatter {
   }
 
   /**
+   * Whether the formatter can format the file at a path. It formats HTML+ERB only, so Slim
+   * templates (`.slim`) are not supported. A missing path means a snippet, which is ERB.
+   */
+  static supportsPath(filePath?: string): boolean {
+    return languageForPath(filePath) === "erb"
+  }
+
+  /**
    * Format a source string, optionally overriding format options per call.
    */
   format(source: string, options: FormatOptions = {}, filePath?: string): string {
@@ -74,6 +82,10 @@ export class Formatter {
   }
 
   formatWithResult(source: string, options: FormatOptions = {}, filePath?: string): FormatResult {
+    // The formatter prints HTML+ERB, so a template in another language (Slim) is left untouched
+    // rather than rewritten as ERB. Formatting Slim needs a Slim printer.
+    if (!Formatter.supportsPath(filePath)) return { output: source, skipped: "unsupported-language", errorCount: 0 }
+
     const input = source.startsWith(BYTE_ORDER_MARK) ? source.slice(BYTE_ORDER_MARK.length) : source
     const result = this.parse(input)
 

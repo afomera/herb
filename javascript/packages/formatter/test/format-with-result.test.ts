@@ -73,4 +73,22 @@ describe("Formatter#formatWithResult", () => {
 
     expect(formatter.format(source)).toBe(source)
   })
+
+  test("leaves Slim templates untouched", () => {
+    const source = "div\n    p   Hello\n"
+
+    for (const filePath of ["app/views/users/show.html.slim", "app/views/users/_card.slim"]) {
+      const result = formatter.formatWithResult(source, {}, filePath)
+
+      expect(result.skipped).toBe("unsupported-language")
+      expect(result.output).toBe(source)
+      expect(formatter.format(source, {}, filePath)).toBe(source)
+    }
+  })
+
+  test("supportsPath", () => {
+    expect(Formatter.supportsPath("app/views/users/show.html.slim")).toBe(false)
+    expect(Formatter.supportsPath("app/views/users/show.html.erb")).toBe(true)
+    expect(Formatter.supportsPath(undefined)).toBe(true)
+  })
 })

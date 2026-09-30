@@ -304,6 +304,47 @@ describe("CLI Binary", () => {
     }
   })
 
+  it("should skip Slim templates in a directory", async () => {
+    await mkdir("test-dir", { recursive: true })
+    const erbFile = join("test-dir", "test.html.erb")
+    const slimFile = join("test-dir", "show.html.slim")
+    const slimInput = "div\n    p   Hello\n"
+
+    await writeFile(erbFile, '<div><p>   Test   </p></div>')
+    await writeFile(slimFile, slimInput)
+
+    try {
+      const result = await execBinary(["test-dir"])
+
+      expectExitCode(result, 0)
+      expect(result.stdout).toContain(`Formatted: ${erbFile}`)
+      expect(result.stdout).not.toContain(`Formatted: ${slimFile}`)
+      expect(result.stdout).toContain("1 Slim template left unchanged")
+      expect(result.stdout).toContain(slimFile)
+      expect(await readFile(slimFile, "utf-8")).toBe(slimInput)
+    } finally {
+      await rm("test-dir", { recursive: true }).catch(() => {})
+    }
+  })
+
+  it("should skip a Slim template even with --force", async () => {
+    await mkdir("test-dir", { recursive: true })
+    const slimFile = join("test-dir", "show.html.slim")
+    const slimInput = "div\n    p   Hello\n"
+
+    await writeFile(slimFile, slimInput)
+
+    try {
+      const result = await execBinary(["--force", slimFile])
+
+      expectExitCode(result, 0)
+      expect(result.stdout).toContain("1 Slim template left unchanged")
+      expect(await readFile(slimFile, "utf-8")).toBe(slimInput)
+    } finally {
+      await rm("test-dir", { recursive: true }).catch(() => {})
+    }
+  })
+
   it("should use proper singular/plural forms", async () => {
     await mkdir("test-dir", { recursive: true })
     const testFile1 = join("test-dir", "test1.html.erb")
