@@ -1,4 +1,5 @@
 import type { SerializedNode } from "./nodes.js"
+import type { ParseOptions } from "./parser-options.js"
 
 export type DiffOperationType =
   | "attribute_added"
@@ -29,6 +30,12 @@ export interface DiffResult {
   operations: DiffOperation[]
 }
 
-export interface DiffOptions {
+/**
+ * Options for `Herb.diff`. Besides `track_whitespace_changes`, both sources are parsed with any
+ * parser options given here, so a Slim template diffs as Slim:
+ *
+ *     Herb.diff(before, after, { language: "slim", exact_semantics: true })
+ */
+export interface DiffOptions extends ParseOptions {
   track_whitespace_changes?: boolean
 }

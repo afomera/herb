@@ -258,4 +258,23 @@ describe("@herb-tools/node", () => {
     const attributes = (result.value.children[0] as any).open_tag.children.filter((child: any) => child.type === "AST_HTML_ATTRIBUTE_NODE")
     expect(attributes.map((attribute: any) => attribute.name.children[0].content)).toEqual(["class", "data-testid"])
   })
+
+  test("diff() parses both sources with the parser options it is given", () => {
+    const result = Herb.diff("div\n  h1 Hello\n", "div\n  h1 World\n", { language: "slim", exact_semantics: true })
+
+    expect(result.identical).toBe(false)
+    expect(result.operations.map((operation) => [operation.type, operation.path])).toEqual([["text_changed", [0, 0, 0]]])
+  })
+
+  test("diff() treats a Slim edit that renders the same markup as identical", () => {
+    const result = Herb.diff("div.card\n  p Hi\n", "div.card\n    p Hi\n\n", { language: "slim", exact_semantics: true, track_whitespace_changes: true })
+
+    expect(result.identical).toBe(true)
+  })
+
+  test("diff() honors Slim shortcuts", () => {
+    const result = Herb.diff("~a Hi\n", "~b Hi\n", { language: "slim", slim_shortcuts: { "~": "data-testid" } })
+
+    expect(result.operations.map((operation) => operation.type)).toEqual(["attribute_value_changed"])
+  })
 })

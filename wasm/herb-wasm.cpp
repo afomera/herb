@@ -228,8 +228,16 @@ val Herb_diff(const std::string& old_source, const std::string& new_source, val 
 
   parser_options_T parser_options = HERB_DEFAULT_PARSER_OPTIONS;
   herb_diff_options_T diff_options = HERB_DEFAULT_DIFF_OPTIONS;
+  std::vector<std::string> openers = ReadERBOpeners(options);
+  std::vector<hb_string_T> opener_storage;
+
+  if (HasERBOpeners(options)) {
+    ApplyERBOpeners(parser_options, openers, opener_storage);
+  }
 
   if (!options.isUndefined() && !options.isNull() && options.typeOf().as<std::string>() == "object") {
+    herb_extract_parser_options(options, &parser_options);
+
     if (options.hasOwnProperty("track_whitespace_changes")) {
       diff_options.track_whitespace_changes = options["track_whitespace_changes"].as<bool>();
     }

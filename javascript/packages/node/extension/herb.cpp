@@ -412,12 +412,27 @@ napi_value Herb_diff(napi_env env, napi_callback_info info) {
 
   parser_options_T parser_options = HERB_DEFAULT_PARSER_OPTIONS;
   herb_diff_options_T diff_options = HERB_DEFAULT_DIFF_OPTIONS;
+  ERBOpeners openers;
 
   if (argc >= 3) {
     napi_valuetype valuetype;
     napi_typeof(env, args[2], &valuetype);
 
     if (valuetype == napi_object) {
+      if (!ReadERBOpeners(env, args[2], openers)) {
+        free(old_string);
+        free(new_string);
+        hb_allocator_destroy(&diff_allocator);
+        hb_allocator_destroy(&old_allocator);
+        hb_allocator_destroy(&new_allocator);
+
+        return nullptr;
+      }
+
+      ApplyERBOpeners(parser_options, openers);
+
+      herb_extract_parser_options(env, args[2], &parser_options);
+
       napi_value track_whitespace_changes_prop;
       bool has_track_whitespace_changes_prop;
       napi_has_named_property(env, args[2], "track_whitespace_changes", &has_track_whitespace_changes_prop);
