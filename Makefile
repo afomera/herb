@@ -159,3 +159,7 @@ clangd_config:
 .PHONY: wasm
 wasm:
 	cd wasm && make
+
+.PHONY: prerelease
+prerelease:
+	script/slim-preview/release.sh
