@@ -30,6 +30,7 @@ gem "reline", "~> 0.7"
 gem "rolldown", "~> 1.2"
 gem "rubocop", "~> 1.72"
 gem "rubocop-performance", "~> 1.26.0"
+gem "slim", "~> 5.2", require: false
 gem "sorbet"
 gem "steep", "~> 2.1"
 gem "turbo-rails", "~> 2.0", require: false
