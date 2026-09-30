@@ -86,6 +86,16 @@ jobs:
       - name: Smoke test herb-slim-preview.tgz
         run: script/slim-preview/smoke.sh tmp/slim-preview/herb-slim-preview.tgz
 
+      - name: Pack herb-dev-tools.tgz
+        run: |
+          core_version=$(jq -r '.version' javascript/packages/core/package.json)
+          number=$(echo "${TAG#slim-preview-}" | tr -c '[:alnum:]\n' '-')
+
+          cd javascript/packages/dev-tools
+          npm pkg set version="$core_version-slim-preview.$number"
+          npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/tmp/slim-preview"
+          mv "$GITHUB_WORKSPACE"/tmp/slim-preview/herb-tools-dev-tools-*.tgz "$GITHUB_WORKSPACE/tmp/slim-preview/herb-dev-tools.tgz"
+
       - name: Package VS Code extension
         run: |
           cd javascript/packages/vscode
@@ -95,7 +105,7 @@ jobs:
       - name: Write checksums
         working-directory: tmp/slim-preview
         run: |
-          sha256sum herb-slim-preview.tgz herb-lsp.vsix > SHA256SUMS
+          sha256sum herb-slim-preview.tgz herb-dev-tools.tgz herb-lsp.vsix > SHA256SUMS
           cat SHA256SUMS
 
       - name: Write release notes
@@ -112,5 +122,6 @@ jobs:
             --title "$TAG" \
             --notes-file tmp/slim-preview/NOTES.md \
             tmp/slim-preview/herb-slim-preview.tgz \
+            tmp/slim-preview/herb-dev-tools.tgz \
             tmp/slim-preview/herb-lsp.vsix \
             tmp/slim-preview/SHA256SUMS

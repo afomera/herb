@@ -52,6 +52,14 @@ npx herb-lint app/views
 npx herb-convert --stdout app/views/users/show.html.slim
 \`\`\`
 
+## Browser dev tools (\`@herb-tools/dev-tools\`)
+
+\`\`\`bash
+yarn add -D $download/herb-dev-tools.tgz   # or: npm i -D $download/herb-dev-tools.tgz
+\`\`\`
+
+Behind an https proxy such as puma-dev, point the overlay at a \`wss://\` URL for \`herb dev\` (for example \`echo "http://localhost:8592" > ~/.puma-dev/herb\` gives \`wss://herb.test\`) with \`<meta name="herb-dev-server-url" content="wss://herb.test">\` or \`HerbDevTools.start({ devServer: { url: "wss://herb.test" } })\`.
+
 ## VS Code
 
 \`\`\`bash
