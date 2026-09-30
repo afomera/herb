@@ -107,6 +107,8 @@ export interface HotReloadHandler {
 export interface HerbClientOptions {
   port?: number
   host?: string
+  /** Full WebSocket URL of the dev server, e.g. `wss://herb.test` behind a TLS proxy. Overrides `host` and `port`. */
+  url?: string
   diagnostics?: () => DiagnosticSink | null
   hotReload?: HotReloadHandler
   onSchema?: (message: SchemaMessage) => void

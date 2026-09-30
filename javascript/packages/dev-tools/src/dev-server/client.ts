@@ -28,12 +28,13 @@ export class HerbClient {
 
     const port = options.port ?? this.detectPort() ?? DEFAULT_PORT
     const host = options.host ?? "localhost"
+    const url = options.url ?? this.detectURL() ?? `ws://${host}:${port}`
 
     this.port = port
     this.connectionDot = new ConnectionDot(this)
 
     this.connection = new Connection({
-      url: `ws://${host}:${port}`,
+      url,
       onMessage: (message) => this.handleMessage(message),
       onConnect: () => this.onConnect(),
       onDisconnect: () => this.onDisconnect(),
@@ -212,6 +213,14 @@ export class HerbClient {
 
   private getDiagnostics(): DiagnosticSink | null {
     return this.options.diagnostics?.() ?? null
+  }
+
+  // A page served over https can't open a plain ws:// connection in every browser (Safari blocks it as
+  // mixed content), so an app behind a TLS proxy such as puma-dev points the client at a wss:// URL.
+  private detectURL(): string | null {
+    const url = document.querySelector('meta[name="herb-dev-server-url"]')?.getAttribute("content")?.trim()
+
+    return url ? url : null
   }
 
   private detectPort(): number | null {
