@@ -62,6 +62,13 @@ pub fn lex(source: &str) -> Result<LexResult, String> {
   }
 }
 
+fn language_from_str(language: &str) -> crate::bindings::herb_language_T {
+  match language {
+    "slim" => crate::bindings::HERB_LANGUAGE_SLIM,
+    _ => crate::bindings::HERB_LANGUAGE_ERB,
+  }
+}
+
 pub fn parse(source: &str) -> Result<ParseResult, String> {
   parse_with_options(source, &ParserOptions::default())
 }
@@ -107,6 +114,7 @@ pub fn parse_with_options(source: &str, options: &ParserOptions) -> Result<Parse
       prism_nodes_deep: options.prism_nodes_deep,
       dot_notation_tags: options.dot_notation_tags,
       html: options.html,
+      language: language_from_str(&options.language),
       start_line: 0,
       start_column: 0,
       timeout_ms: options.timeout,
@@ -371,6 +379,7 @@ pub fn diff_with_options(old_source: &str, new_source: &str, options: &DiffOptio
       dot_notation_tags: false,
       transform_conditionals: false,
       html: true,
+      language: crate::bindings::HERB_LANGUAGE_ERB,
       track_locations: true,
       start_line: 0,
       start_column: 0,

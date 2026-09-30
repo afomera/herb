@@ -18,6 +18,8 @@ module Herb
 
     attr_reader iteration_nodes: bool
 
+    attr_reader language: String | Symbol
+
     attr_reader max_errors: Integer?
 
     attr_reader prism_nodes: bool
@@ -54,6 +56,8 @@ module Herb
 
     DEFAULT_ITERATION_NODES: bool
 
+    DEFAULT_LANGUAGE: String
+
     DEFAULT_MAX_ERRORS: Integer
 
     DEFAULT_PRISM_NODES: bool
@@ -76,11 +80,11 @@ module Herb
 
     DEFAULT_TRANSFORM_CONDITIONALS: bool
 
-    # : (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
-    def initialize: (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
+    # : (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
+    def initialize: (?action_view_helpers: bool, ?analyze: bool, ?arena_stats: bool, ?dot_notation_tags: bool, ?erb_openers: Array[String], ?herb_directives: bool, ?html: bool, ?iteration_nodes: bool, ?language: String | Symbol, ?max_errors: Integer?, ?prism_nodes: bool, ?prism_nodes_deep: bool, ?prism_program: bool, ?render_nodes: bool, ?strict: bool, ?strict_locals: bool, ?timeout: Numeric, ?track_locations: bool, ?track_whitespace: bool, ?transform_conditionals: bool) -> void
 
-    # : () -> Hash[Symbol, (bool | Numeric | Array[String] | nil)]
-    def to_h: () -> Hash[Symbol, bool | Numeric | Array[String] | nil]
+    # : () -> Hash[Symbol, (bool | Numeric | String | Symbol | Array[String] | nil)]
+    def to_h: () -> Hash[Symbol, bool | Numeric | String | Symbol | Array[String] | nil]
 
     # : () -> String
     def inspect: () -> String

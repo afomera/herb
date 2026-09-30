@@ -203,6 +203,10 @@ napi_value CreateParseResult(napi_env env, AST_DOCUMENT_NODE_T* root, napi_value
   napi_set_named_property(env, options_object, "prism_nodes", prism_nodes_value);
   napi_set_named_property(env, options_object, "prism_nodes_deep", prism_nodes_deep_value);
 
+  napi_value language_value;
+  napi_create_string_utf8(env, herb_language_to_string(options->language), NAPI_AUTO_LENGTH, &language_value);
+  napi_set_named_property(env, options_object, "language", language_value);
+
   napi_set_named_property(env, result, "options", options_object);
 
   napi_value error_count_value;

@@ -732,6 +732,15 @@ parser_options:
       default: false
       description: "Whether iteration nodes were parsed during parsing."
 
+    # The single dispatch hook for non-ERB template languages: `herb_parse` hands the source to the
+    # language's frontend (src/slim), which builds the same HTML+ERB syntax tree.
+    - name: "language"
+      type: "enum"
+      c_enum: "herb_language"
+      values: ["erb", "slim"]
+      default: "erb"
+      description: "The template language of the source. `slim` parses a Slim template into the equivalent HTML+ERB syntax tree."
+
     - name: "max_errors"
       type: "uint32"
       default: 25
