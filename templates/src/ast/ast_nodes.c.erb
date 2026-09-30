@@ -144,14 +144,26 @@ static void ast_free_<%= node.human %>(<%= node.struct_type %>* <%= node.human %
 }
 <%- end -%>
 
-static void ast_rebase_token(token_T* token, const char* from, const char* to, size_t length) {
+static void ast_rebase_token(token_T* token, const char* from, const char* to, size_t length, uint32_t range_offset) {
   if (token == NULL || token->value.data == NULL) { return; }
   if (token->value.data < from || token->value.data >= from + length) { return; }
 
   token->value.data = (char*) to + (token->value.data - from);
+  token->range.from += range_offset;
+  token->range.to += range_offset;
 }
 
 void ast_node_rebase_tokens(AST_NODE_T* node, const char* from, const char* to, size_t length) {
+  ast_node_rebase_tokens_with_range_offset(node, from, to, length, 0);
+}
+
+void ast_node_rebase_tokens_with_range_offset(
+  AST_NODE_T* node,
+  const char* from,
+  const char* to,
+  size_t length,
+  uint32_t range_offset
+) {
   if (!node) { return; }
 
   switch (node->type) {
@@ -164,14 +176,14 @@ void ast_node_rebase_tokens(AST_NODE_T* node, const char* from, const char* to, 
       <%- node.fields.each do |field| -%>
       <%- case field -%>
       <%- when Herb::Template::TokenField -%>
-      ast_rebase_token(typed-><%= field.name %>, from, to, length);
+      ast_rebase_token(typed-><%= field.name %>, from, to, length, range_offset);
       <%- when Herb::Template::BorrowedNodeField -%>
       <%- when Herb::Template::NodeField -%>
-      ast_node_rebase_tokens((AST_NODE_T*) typed-><%= field.name %>, from, to, length);
+      ast_node_rebase_tokens_with_range_offset((AST_NODE_T*) typed-><%= field.name %>, from, to, length, range_offset);
       <%- when Herb::Template::ArrayField -%>
       if (typed-><%= field.name %> != NULL) {
         for (size_t i = 0; i < hb_array_size(typed-><%= field.name %>); i++) {
-          ast_node_rebase_tokens((AST_NODE_T*) hb_array_get(typed-><%= field.name %>, i), from, to, length);
+          ast_node_rebase_tokens_with_range_offset((AST_NODE_T*) hb_array_get(typed-><%= field.name %>, i), from, to, length, range_offset);
         }
       }
       <%- end -%>
