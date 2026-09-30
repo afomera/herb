@@ -27,6 +27,7 @@ module Herb
             next if child.is_a?(Herb::AST::WhitespaceNode)
 
             next unless child.is_a?(Herb::AST::ERBContentNode) && erb_outputs?(child)
+            next if slim_splat_output?(child)
 
             prism_node = child.prism
 
@@ -60,6 +61,12 @@ module Herb
               "Use static attribute names with dynamic values instead."
             )
           end
+        end
+
+        # A Slim splat (`*attrs`) compiles to the `_slim_splat` helper the Slim frontend defines,
+        # which escapes every value it writes, the way `tag.attributes` does in ERB.
+        def slim_splat_output?(node)
+          node.content&.value.to_s.lstrip.start_with?("_slim_splat.(")
         end
 
         def tag_attributes_prism_node?(prism_node)
