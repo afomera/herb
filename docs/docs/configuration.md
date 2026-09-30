@@ -203,7 +203,7 @@ By default, Herb processes these file patterns:
 - `**/*.turbo_stream.erb`
 - `**/*.slim`
 
-Slim templates (`.slim`, `.html.slim`) are always parsed as Slim, never as ERB. The linter and the Language Server support them. The formatter skips them, since it only formats HTML+ERB for now.
+Slim templates (`.slim`, `.html.slim`) are always parsed as Slim, never as ERB. The linter, the Language Server, [`Herb::Engine`](/projects/engine#slim-templates) and the dev server support them. The formatter skips them, since it only formats HTML+ERB for now.
 
 And excludes these patterns by default:
 - `coverage/**/*`

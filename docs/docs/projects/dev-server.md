@@ -20,6 +20,10 @@ The server starts watching all template files in the directory, diffs changes us
 3. **Smart patching**: for text and attribute changes, sends a patch that the client applies without reloading
 4. **Reload fallback**: for structural changes (insertions, removals, ERB changes), tells the client to reload
 
+### Slim templates
+
+`.slim` files are watched too. They are parsed as Slim with the project's Slim settings, so a parse error shows in the browser at its Slim line. `Herb.diff` only diffs HTML+ERB and slot schemas only exist for ERB, so no Slim edit is patched in place and the host's compiler is never asked for one: every edit that still parses tells the browser to refetch, which reloads a page that rendered the template (one carrying its [debug markers](/projects/engine#slim-in-rails)).
+
 ## Architecture
 
 The dev server consists of two parts:

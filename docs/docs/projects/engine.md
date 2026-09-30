@@ -130,6 +130,27 @@ Herb::Engine.new(source, parser_options: { html: false })
 
 The ERB structure is still parsed, so control flow, blocks, and trimming behave the same as in an HTML template. Context-aware escaping falls back to `escapefunc` for every `<%= %>`, since there is no attribute, script, or style context to tell apart. Nothing else about compilation changes.
 
+### Slim templates
+
+The engine compiles Slim too. Pass `language: "slim"`, or a `filename` ending in `.slim`, which the engine reads the language from when nothing else says:
+
+```ruby
+Herb::Engine.new(source, language: "slim", escape: true)
+Herb::Engine.new(source, filename: "app/views/users/show.html.slim", escape: true)
+```
+
+The template is parsed into Herb's HTML+ERB tree with [`exact_semantics`](/parser-options#exact-semantics), always, since that is the tree that renders what the Slim gem renders: attributes whose value is `nil` or `false` are left out, `class` values are merged, splats go through the same helper Slim uses. The project's [Slim settings](/configuration#slim-configuration) (`slim:` in `.herb.yml`) apply, and `parser_options` passed to the engine override them. From there it compiles like any other template, so validators, [transform visitors](#transform-visitors), [registered visitors](#registered-visitors) and the [debug markers](/projects/engine/visitors/debug) all work on Slim.
+
+Three things are different from ERB, all to match Slim:
+
+- `=` is HTML-escaped and `==` is not, wherever the output lands. The context-aware `attrfunc`, `jsfunc` and `cssfunc` are not used, because Slim escapes an attribute value or a `javascript:` block the same way it escapes text.
+- `trim` is off. Slim's whitespace is already exact in the tree, so nothing is folded around code.
+- The compiled Ruby is aligned to the Slim source by line: each piece of Ruby is moved down to the line it was written on, so a `NoMethodError` in `p = user.name` on line 12 is reported on line 12. Code the Slim frontend generates, like the splat helpers, is folded onto one line. A multi-line text block can put a statement a line or two early, never late.
+
+In Rails, render through [`Herb::ActionView::SlimHandler`](#slim-in-rails), which escapes through Action View's output buffer so `html_safe` strings are left alone and block helpers capture the way they do with the Slim gem. Plain `Herb::Engine` escapes with `escapefunc`, which ignores `html_safe`, and writes a `= helper do` block straight into the buffer (see [Blocks](#blocks)), where the Slim gem outside Rails captures it.
+
+A few renders differ from the Slim gem byte for byte and not in the HTML they mean. Slim sorts attributes by name and Herb keeps them in source order, and `div/` renders `<div/>` where Slim renders `<div>`.
+
 ### Blocks
 
 `<%= %>` with a block compiles so that the block body writes into the buffer directly:
@@ -423,6 +444,85 @@ Each visitor has a page of its own.
 | [`ScopedStyle::Visitor`](/projects/engine/visitors/scoped-style) *(experimental)* | Scopes a `<style scoped>` block to the markup written in the same file. |
 | [`CSSInliner::Visitor`](/projects/engine/visitors/css-inliner) *(experimental)* | Moves a stylesheet into `style` attributes, which is what an email client reads. |
 
+## Registered Visitors
+
+An application usually wants a pass of its own on every template it renders, the way a Slim app adds a Temple filter with `Slim::Engine.after`. Every integration builds its engine in its own place (Rails, ReActionView, a template handler), so rather than find each of them, register the visitor with `Herb::Engine`, once, and every compile runs it:
+
+```ruby [config/initializers/herb.rb]
+Herb::Engine.register_visitor(StripTestIds) unless Rails.env.test?
+```
+
+`register_visitor` takes one of three things:
+
+| Registration | Built | Suits |
+|---|---|---|
+| A visitor class | once per compile, with `new` | a visitor that keeps state while it walks |
+| A block | once per compile, called with the template's [context](#visitor-context), returning a visitor or `nil` to skip the template | a visitor for some templates only, or one that needs arguments |
+| A visitor instance | once, shared by every compile | a visitor that keeps no state |
+
+```ruby
+Herb::Engine.register_visitor do |context|
+  StripTestIds.new if context.language == "slim"
+end
+```
+
+Registered visitors run after the visitors the engine was given. `before:` and `after:` place one against a visitor class instead, and fall back to the end when that class is not in the stack. [Run order](#run-order) declarations are honored, so a registered visitor that reads ERB source still runs before one that rewrites it. `register_visitor` returns the registration, which `Herb::Engine.unregister_visitor` takes to remove it again, and `Herb::Engine.reset_registered_visitors!` removes them all. Pass `registered_visitors: false` to compile a template without them.
+
+This is the Herb version of an app's Temple filter that strips `data-testid` attributes outside the test environment:
+
+```ruby [config/initializers/herb.rb]
+class StripTestIds < Herb::Visitor
+  BRANCHES = [:statements, :subsequent, :else_clause].freeze
+
+  def visit_html_open_tag_node(node)
+    strip(node.children)
+    super
+  end
+
+  private
+
+  def strip(nodes)
+    doomed = nodes.each_index.select { |index| test_id?(nodes[index]) }
+    doomed |= doomed.map { |index| index - 1 }.select { |index| index >= 0 && nodes[index].is_a?(Herb::AST::WhitespaceNode) }
+    doomed.sort.reverse_each { |index| nodes.delete_at(index) }
+
+    # A Slim attribute with a Ruby value (`span data-testid=id`) is lowered into an `if` inside the
+    # open tag, so look inside control flow too.
+    nodes.each { |child| branches(child).each { |branch| strip(branch) } }
+  end
+
+  def branches(node)
+    BRANCHES.filter_map do |branch|
+      next unless node.respond_to?(branch)
+
+      value = node.public_send(branch)
+      value.is_a?(Array) ? value : value && [value]
+    end
+  end
+
+  def test_id?(node)
+    node.is_a?(Herb::AST::HTMLAttributeNode) &&
+      node.name.children.all?(Herb::AST::LiteralNode) &&
+      node.name.children.map(&:content).join == "data-testid"
+  end
+end
+
+Herb::Engine.register_visitor(StripTestIds) unless Rails.env.test?
+```
+
+It replaces this, and applies to ERB templates as well as Slim ones:
+
+```ruby
+class SlimTestIdFilter < Temple::HTML::Filter
+  def on_html_attr(name, value) = (name == "data-testid" ? nil : super)
+  def on_html_attrs(*attrs) = [:html, :attrs, *attrs.map { |a| compile(a) }.compact]
+end
+
+Slim::Engine.after Slim::Controls, SlimTestIdFilter
+```
+
+Like the Temple filter, it sees the attributes a template writes, not the ones a splat (`*attrs`) or `tag.attributes` builds at runtime.
+
 ## Diagnostics
 
 Anything the engine or a visitor finds is a `Herb::Diagnostic`, whoever found it and whenever they found it. One value object means a parse error, a security violation, and a measurement taken while the page rendered all reach the browser through the same channel, so a new checker gets delivery without inventing one.
@@ -638,3 +738,61 @@ ReActionView.configure do |config|
   ]
 end
 ```
+
+## Slim in Rails
+
+`Herb::ActionView::SlimHandler` is an Action View template handler that compiles `.slim` templates with `Herb::Engine`. It is opt-in: register it for `:slim` from an initializer, which replaces the Slim gem's handler (slim-rails registers its own earlier, in a Railtie).
+
+```ruby [config/initializers/herb_slim.rb]
+require "herb/action_view/slim_handler"
+
+# DebugVisitor markers for the dev tools overlay, on templates under Rails.root.
+Herb::ActionView::SlimHandler.debug = Rails.env.development?
+
+ActiveSupport.on_load(:action_view) do
+  ActionView::Template.register_template_handler :slim, Herb::ActionView::SlimHandler
+end
+```
+
+To move over part of an app first, give it a predicate and hand everything else back to the Slim gem:
+
+```ruby [config/initializers/herb_slim.rb]
+ActiveSupport.on_load(:action_view) do
+  handler = Herb::ActionView::SlimHandler.new(
+    only: ->(template) { template.identifier.include?("/app/views/admin/") },
+    fallback: Slim::RailsTemplate.new
+  )
+
+  ActionView::Template.register_template_handler :slim, handler
+end
+```
+
+It compiles with Rails' own `ActionView::Template::Handlers::ERB::Herb` where Rails ships one (8.2), and with `Herb::ActionView::OutputBufferEngine` before that. Either way it appends to `@output_buffer`, so escaping and `html_safe` follow Action View, block helpers capture, and strict locals (`/# locals: (title:)`) and `annotate_rendered_view_with_filenames` work as they do for ERB.
+
+| Setting | Default | Description |
+|---|---|---|
+| `SlimHandler.debug` | `false` | Adds `DebugVisitor` to templates under `project_path` |
+| `SlimHandler.visitors` | `nil` | Visitors for every template it compiles, as a list or a callable taking the `ActionView::Template` |
+| `SlimHandler.project_path` | `Rails.root` | Where local templates live, for the debug markers and editor links |
+| `SlimHandler.engine_class` | see above | The engine class to compile with |
+
+[Registered visitors](#registered-visitors) apply as well, since the handler builds a `Herb::Engine`.
+
+The dev tools overlay also needs its meta tags and script on the page. ReActionView adds them to ERB layouts in development, so a Slim layout adds them itself:
+
+```slim [app/views/layouts/application.html.slim]
+head
+  - if Rails.env.development?
+    meta name="herb-debug-mode" content="true"
+    meta name="herb-project-path" content=Rails.root.to_s
+```
+
+and starts [`@herb-tools/dev-tools`](/projects/dev-tools) from the app's JavaScript in development (or includes ReActionView's `reactionview-dev-tools.umd.js` when ReActionView is installed):
+
+```js
+import { HerbDevTools } from "@herb-tools/dev-tools"
+
+HerbDevTools.start()
+```
+
+With the markers in place, the overlay outlines each Slim view and partial, shows the Slim that wrote each output (`= user.name`, `#{title}`), and opens the editor at its Slim line and column. [`herb dev`](/projects/dev-server) watches `.slim` files and reloads a page that rendered the template you saved.

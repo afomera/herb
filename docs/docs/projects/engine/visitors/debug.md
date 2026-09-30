@@ -26,6 +26,8 @@ The first top-level element of a template carries which template it is, and each
 | `data-herb-debug-line`, `-column`    | span    | where that tag is                                 |
 | `data-herb-debug-node`               | both    | which render this was, with `node: true`          |
 
+In a [Slim template](/projects/engine#slim-templates) the markers name the `.slim` file, the line and column are the Slim ones, and `data-herb-debug-erb` holds the Slim that wrote the output: `= user.name`, `== html`, `#{title}` or `#{{html}}`.
+
 ## Tracing rendered output back to a tag
 
 `<%= link_to "Abc", "" %>` produces an `<a>` that says nothing about where it came from. Wrapping it says so:
