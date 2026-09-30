@@ -196,10 +196,11 @@ module Herb
       def wrapped_output(node)
         body = code(node)
         call = captured?(node) ? "output" : "at"
+        opening = node.tag_opening&.value == "<%==" ? "<%==" : "<%="
 
-        return erb_node(node, "<%=", "#{SESSION}.#{call}(#{position(node)}) {\n#{body}\n}") if spans_lines?(body)
+        return erb_node(node, opening, "#{SESSION}.#{call}(#{position(node)}) {\n#{body}\n}") if spans_lines?(body)
 
-        erb_node(node, "<%=", "#{SESSION}.#{call}(#{position(node)}) { #{body} }")
+        erb_node(node, opening, "#{SESSION}.#{call}(#{position(node)}) { #{body} }")
       end
 
       def captured?(node)

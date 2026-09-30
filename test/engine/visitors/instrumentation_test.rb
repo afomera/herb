@@ -25,6 +25,7 @@ module Engine
       "a conditional" => "<% if true %>yes<% else %>no<% end %>",
       "a comment" => "<%# ignored %>ok",
       "markup around a tag" => "<p>before</p><%= 1 %><p>after</p>",
+      "a double-equals output" => %(<%== "<b>&</b>" %><%= "<b>&</b>" %>),
     }.freeze
 
     def instrumented(source)
