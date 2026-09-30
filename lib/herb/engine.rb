@@ -13,6 +13,7 @@ require_relative "visitor/diagnostics"
 require_relative "engine/helpers"
 require_relative "engine/compiler"
 require_relative "engine/errors"
+require_relative "engine/registered_visitors"
 require_relative "diagnostic/formatter"
 require_relative "template_language"
 
@@ -101,6 +102,7 @@ module Herb
       @source_line_scanned = 0
 
       @visitors = Visitor::Stack.build(properties.fetch(:visitors, Visitor::Stack.new))
+      @visitors = Engine.apply_registered_visitors(@visitors, @context) unless properties[:registered_visitors] == false
       @visitors.validate_order!
       @parser_options = Herb::Visitor.parser_options_for(@visitors, @parser_options)
 
@@ -495,7 +497,7 @@ module Herb
     end
 
     def context_options(properties)
-      properties.except(:visitors, :src, :context, :resolver)
+      properties.except(:visitors, :src, :context, :resolver, :registered_visitors)
     end
 
     # What the engine passes its visitors besides the file: the template's source, and the caller's
