@@ -1,0 +1,7 @@
+---
+source: "Slim::ParserTest#test_0001_empty template"
+input: ""
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:0))
+└── children: []

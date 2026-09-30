@@ -1,0 +1,60 @@
+---
+source: "Slim::ParserTest#test_0007_quoted attribute with interpolation"
+input: "a href=\"/users/\#{user.id}\" Profile"
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:34))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(1:34))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:26))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "a" (location: (1:0)-(1:1))
+        │       ├── tag_closing: ">" (location: (1:26)-(1:26))
+        │       ├── children: (2 items)
+        │       │   ├── @ WhitespaceNode (location: (1:2)-(1:2))
+        │       │   │   └── value: " " (location: (1:2)-(1:2))
+        │       │   │
+        │       │   └── @ HTMLAttributeNode (location: (1:2)-(1:26))
+        │       │       ├── name:
+        │       │       │   └── @ HTMLAttributeNameNode (location: (1:2)-(1:6))
+        │       │       │       └── children: (1 item)
+        │       │       │           └── @ LiteralNode (location: (1:2)-(1:6))
+        │       │       │               └── content: "href"
+        │       │       │
+        │       │       │
+        │       │       ├── equals: "=" (location: (1:6)-(1:7))
+        │       │       └── value:
+        │       │           └── @ HTMLAttributeValueNode (location: (1:7)-(1:26))
+        │       │               ├── open_quote: """ (location: (1:7)-(1:8))
+        │       │               ├── children: (2 items)
+        │       │               │   ├── @ LiteralNode (location: (1:8)-(1:15))
+        │       │               │   │   └── content: "/users/"
+        │       │               │   │
+        │       │               │   └── @ ERBContentNode (location: (1:15)-(1:24))
+        │       │               │       ├── tag_opening: "<%=" (location: (1:15)-(1:15))
+        │       │               │       ├── content: "user.id" (location: (1:17)-(1:24))
+        │       │               │       ├── tag_closing: "%>" (location: (1:24)-(1:24))
+        │       │               │       ├── parsed: true
+        │       │               │       └── valid: true
+        │       │               │
+        │       │               ├── close_quote: """ (location: (1:25)-(1:26))
+        │       │               └── quoted: true
+        │       │
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "a" (location: (1:0)-(1:1))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (1:27)-(1:34))
+        │       └── content: "Profile"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (1:34)-(1:34))
+        │       ├── tag_opening: "</" (location: (1:34)-(1:34))
+        │       ├── tag_name: "a" (location: (1:34)-(1:34))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (1:34)-(1:34))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

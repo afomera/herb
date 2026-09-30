@@ -1,0 +1,16 @@
+---
+source: "Slim::ParserTest#test_0026_broken lines"
+input: |2-
+= link_to "x",
+  path
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:6))
+└── children: (1 item)
+    └── @ ERBContentNode (location: (1:0)-(2:6))
+        ├── tag_opening: "<%=" (location: (1:0)-(1:0))
+        ├── content: "link_to "x",
+          path" (location: (1:2)-(2:6))
+        ├── tag_closing: "%>" (location: (2:6)-(2:6))
+        ├── parsed: true
+        └── valid: true

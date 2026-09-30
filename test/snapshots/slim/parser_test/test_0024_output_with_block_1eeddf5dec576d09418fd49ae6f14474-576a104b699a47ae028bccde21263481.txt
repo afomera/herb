@@ -1,0 +1,36 @@
+---
+source: "Slim::ParserTest#test_0024_output with block"
+input: |2-
+= form_with model: post do |f|
+  = f.text_field :title
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:23))
+└── children: (1 item)
+    └── @ ERBBlockNode (location: (1:0)-(2:23))
+        ├── tag_opening: "<%=" (location: (1:0)-(1:0))
+        ├── content: "form_with model: post do |f|" (location: (1:2)-(1:30))
+        ├── tag_closing: "%>" (location: (1:30)-(1:30))
+        ├── body: (1 item)
+        │   └── @ ERBContentNode (location: (2:2)-(2:23))
+        │       ├── tag_opening: "<%=" (location: (2:2)-(2:2))
+        │       ├── content: "f.text_field :title" (location: (2:4)-(2:23))
+        │       ├── tag_closing: "%>" (location: (2:23)-(2:23))
+        │       ├── parsed: true
+        │       └── valid: true
+        │
+        ├── block_arguments: (1 item)
+        │   └── @ RubyParameterNode (location: (1:28)-(1:29))
+        │       ├── name: "f" (location: (1:28)-(1:29))
+        │       ├── default_value: ∅
+        │       ├── kind: "positional"
+        │       └── required: true
+        │
+        ├── rescue_clause: ∅
+        ├── else_clause: ∅
+        ├── ensure_clause: ∅
+        └── end_node:
+            └── @ ERBEndNode (location: (2:23)-(2:23))
+                ├── tag_opening: "<%" (location: (2:23)-(2:23))
+                ├── content: " end " (location: (2:23)-(2:23))
+                └── tag_closing: "%>" (location: (2:23)-(2:23))

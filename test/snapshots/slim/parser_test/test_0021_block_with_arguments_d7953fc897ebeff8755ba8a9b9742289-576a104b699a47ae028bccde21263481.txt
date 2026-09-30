@@ -1,0 +1,57 @@
+---
+source: "Slim::ParserTest#test_0021_block with arguments"
+input: |2-
+- items.each do |item|
+  li = item
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:11))
+└── children: (1 item)
+    └── @ ERBBlockNode (location: (1:0)-(2:11))
+        ├── tag_opening: "<%" (location: (1:0)-(1:0))
+        ├── content: "items.each do |item|" (location: (1:2)-(1:22))
+        ├── tag_closing: "%>" (location: (1:22)-(1:22))
+        ├── body: (1 item)
+        │   └── @ HTMLElementNode (location: (2:2)-(2:11))
+        │       ├── open_tag:
+        │       │   └── @ HTMLOpenTagNode (location: (2:2)-(2:4))
+        │       │       ├── tag_opening: "<" (location: (2:2)-(2:2))
+        │       │       ├── tag_name: "li" (location: (2:2)-(2:4))
+        │       │       ├── tag_closing: ">" (location: (2:4)-(2:4))
+        │       │       ├── children: []
+        │       │       └── is_void: false
+        │       │
+        │       ├── tag_name: "li" (location: (2:2)-(2:4))
+        │       ├── body: (1 item)
+        │       │   └── @ ERBContentNode (location: (2:5)-(2:11))
+        │       │       ├── tag_opening: "<%=" (location: (2:5)-(2:5))
+        │       │       ├── content: "item" (location: (2:7)-(2:11))
+        │       │       ├── tag_closing: "%>" (location: (2:11)-(2:11))
+        │       │       ├── parsed: true
+        │       │       └── valid: true
+        │       │
+        │       ├── close_tag:
+        │       │   └── @ HTMLCloseTagNode (location: (2:11)-(2:11))
+        │       │       ├── tag_opening: "</" (location: (2:11)-(2:11))
+        │       │       ├── tag_name: "li" (location: (2:11)-(2:11))
+        │       │       ├── children: []
+        │       │       └── tag_closing: ">" (location: (2:11)-(2:11))
+        │       │
+        │       ├── is_void: false
+        │       └── element_source: "Slim"
+        │
+        ├── block_arguments: (1 item)
+        │   └── @ RubyParameterNode (location: (1:17)-(1:21))
+        │       ├── name: "item" (location: (1:17)-(1:21))
+        │       ├── default_value: ∅
+        │       ├── kind: "positional"
+        │       └── required: true
+        │
+        ├── rescue_clause: ∅
+        ├── else_clause: ∅
+        ├── ensure_clause: ∅
+        └── end_node:
+            └── @ ERBEndNode (location: (2:11)-(2:11))
+                ├── tag_opening: "<%" (location: (2:11)-(2:11))
+                ├── content: " end " (location: (2:11)-(2:11))
+                └── tag_closing: "%>" (location: (2:11)-(2:11))

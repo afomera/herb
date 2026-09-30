@@ -1,0 +1,14 @@
+---
+source: "Slim::ParserErrorsTest#test_0003_unknown line indicator"
+input: "? what"
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:6))
+├── errors: (1 error)
+│   └── @ UnexpectedError (location: (1:0)-(1:6))
+│       ├── message: "Unknown line indicator. Expected: a tag, text, code, comment or doctype, found: `? what`."
+│       ├── description: "Unknown line indicator"
+│       ├── expected: "a tag, text, code, comment or doctype"
+│       └── found: "`? what`"
+│
+└── children: []

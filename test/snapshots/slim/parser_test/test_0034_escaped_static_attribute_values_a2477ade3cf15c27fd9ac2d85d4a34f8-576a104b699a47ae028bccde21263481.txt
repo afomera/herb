@@ -1,0 +1,76 @@
+---
+source: "Slim::ParserTest#test_0034_escaped static attribute values"
+input: "a title='a \"b\" & <c>' data-raw==\"<b>\" Link"
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:42))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(1:42))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:37))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "a" (location: (1:0)-(1:1))
+        │       ├── tag_closing: ">" (location: (1:37)-(1:37))
+        │       ├── children: (4 items)
+        │       │   ├── @ WhitespaceNode (location: (1:2)-(1:2))
+        │       │   │   └── value: " " (location: (1:2)-(1:2))
+        │       │   │
+        │       │   ├── @ HTMLAttributeNode (location: (1:2)-(1:21))
+        │       │   │   ├── name:
+        │       │   │   │   └── @ HTMLAttributeNameNode (location: (1:2)-(1:7))
+        │       │   │   │       └── children: (1 item)
+        │       │   │   │           └── @ LiteralNode (location: (1:2)-(1:7))
+        │       │   │   │               └── content: "title"
+        │       │   │   │
+        │       │   │   │
+        │       │   │   ├── equals: "=" (location: (1:7)-(1:8))
+        │       │   │   └── value:
+        │       │   │       └── @ HTMLAttributeValueNode (location: (1:8)-(1:21))
+        │       │   │           ├── open_quote: """ (location: (1:8)-(1:9))
+        │       │   │           ├── children: (1 item)
+        │       │   │           │   └── @ LiteralNode (location: (1:9)-(1:20))
+        │       │   │           │       └── content: "a &quot;b&quot; &amp; &lt;c&gt;"
+        │       │   │           │
+        │       │   │           ├── close_quote: """ (location: (1:20)-(1:21))
+        │       │   │           └── quoted: true
+        │       │   │
+        │       │   │
+        │       │   ├── @ WhitespaceNode (location: (1:22)-(1:22))
+        │       │   │   └── value: " " (location: (1:22)-(1:22))
+        │       │   │
+        │       │   └── @ HTMLAttributeNode (location: (1:22)-(1:37))
+        │       │       ├── name:
+        │       │       │   └── @ HTMLAttributeNameNode (location: (1:22)-(1:30))
+        │       │       │       └── children: (1 item)
+        │       │       │           └── @ LiteralNode (location: (1:22)-(1:30))
+        │       │       │               └── content: "data-raw"
+        │       │       │
+        │       │       │
+        │       │       ├── equals: "=" (location: (1:30)-(1:31))
+        │       │       └── value:
+        │       │           └── @ HTMLAttributeValueNode (location: (1:32)-(1:37))
+        │       │               ├── open_quote: """ (location: (1:32)-(1:33))
+        │       │               ├── children: (1 item)
+        │       │               │   └── @ LiteralNode (location: (1:33)-(1:36))
+        │       │               │       └── content: "<b>"
+        │       │               │
+        │       │               ├── close_quote: """ (location: (1:36)-(1:37))
+        │       │               └── quoted: true
+        │       │
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "a" (location: (1:0)-(1:1))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (1:38)-(1:42))
+        │       └── content: "Link"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (1:42)-(1:42))
+        │       ├── tag_opening: "</" (location: (1:42)-(1:42))
+        │       ├── tag_name: "a" (location: (1:42)-(1:42))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (1:42)-(1:42))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

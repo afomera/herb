@@ -1,0 +1,68 @@
+---
+source: "Slim::ParserTest#test_0029_embedded javascript and css"
+input: |2-
+javascript:
+  alert("#{message}");
+css:
+  p { color: red; }
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(4:19))
+└── children: (2 items)
+    ├── @ HTMLElementNode (location: (1:0)-(2:22))
+    │   ├── open_tag:
+    │   │   └── @ HTMLOpenTagNode (location: (1:0)-(1:11))
+    │   │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+    │   │       ├── tag_name: "script" (location: (1:0)-(1:10))
+    │   │       ├── tag_closing: ">" (location: (1:11)-(1:11))
+    │   │       ├── children: []
+    │   │       └── is_void: false
+    │   │
+    │   ├── tag_name: "script" (location: (1:0)-(1:10))
+    │   ├── body: (3 items)
+    │   │   ├── @ LiteralNode (location: (2:2)-(2:9))
+    │   │   │   └── content: "alert(\""
+    │   │   │
+    │   │   ├── @ ERBContentNode (location: (2:9)-(2:18))
+    │   │   │   ├── tag_opening: "<%=" (location: (2:9)-(2:9))
+    │   │   │   ├── content: "message" (location: (2:11)-(2:18))
+    │   │   │   ├── tag_closing: "%>" (location: (2:18)-(2:18))
+    │   │   │   ├── parsed: true
+    │   │   │   └── valid: true
+    │   │   │
+    │   │   └── @ LiteralNode (location: (2:19)-(2:22))
+    │   │       └── content: "\");"
+    │   │
+    │   ├── close_tag:
+    │   │   └── @ HTMLCloseTagNode (location: (2:22)-(2:22))
+    │   │       ├── tag_opening: "</" (location: (2:22)-(2:22))
+    │   │       ├── tag_name: "script" (location: (2:22)-(2:22))
+    │   │       ├── children: []
+    │   │       └── tag_closing: ">" (location: (2:22)-(2:22))
+    │   │
+    │   ├── is_void: false
+    │   └── element_source: "Slim"
+    │
+    └── @ HTMLElementNode (location: (3:0)-(4:19))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (3:0)-(3:4))
+        │       ├── tag_opening: "<" (location: (3:0)-(3:0))
+        │       ├── tag_name: "style" (location: (3:0)-(3:3))
+        │       ├── tag_closing: ">" (location: (3:4)-(3:4))
+        │       ├── children: []
+        │       └── is_void: false
+        │
+        ├── tag_name: "style" (location: (3:0)-(3:3))
+        ├── body: (1 item)
+        │   └── @ LiteralNode (location: (4:2)-(4:19))
+        │       └── content: "p { color: red; }"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (4:19)-(4:19))
+        │       ├── tag_opening: "</" (location: (4:19)-(4:19))
+        │       ├── tag_name: "style" (location: (4:19)-(4:19))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (4:19)-(4:19))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

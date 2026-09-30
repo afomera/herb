@@ -1,0 +1,9 @@
+---
+source: "Slim::ParserTest#test_0014_text with trailing whitespace marker"
+input: "' Hello"
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:7))
+└── children: (1 item)
+    └── @ HTMLTextNode (location: (1:2)-(1:7))
+        └── content: "Hello "

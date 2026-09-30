@@ -1,0 +1,94 @@
+---
+source: "Slim::ParserTest#test_0025_begin rescue ensure"
+input: |2-
+- begin
+  = risky
+- rescue StandardError
+  p Failed
+- ensure
+  p Done
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(6:8))
+└── children: (1 item)
+    └── @ ERBBeginNode (location: (1:0)-(6:8))
+        ├── tag_opening: "<%" (location: (1:0)-(1:0))
+        ├── content: "begin" (location: (1:2)-(1:7))
+        ├── tag_closing: "%>" (location: (1:7)-(1:7))
+        ├── statements: (1 item)
+        │   └── @ ERBContentNode (location: (2:2)-(2:9))
+        │       ├── tag_opening: "<%=" (location: (2:2)-(2:2))
+        │       ├── content: "risky" (location: (2:4)-(2:9))
+        │       ├── tag_closing: "%>" (location: (2:9)-(2:9))
+        │       ├── parsed: true
+        │       └── valid: true
+        │
+        ├── rescue_clause:
+        │   └── @ ERBRescueNode (location: (3:0)-(4:10))
+        │       ├── tag_opening: "<%" (location: (3:0)-(3:0))
+        │       ├── content: "rescue StandardError" (location: (3:2)-(3:22))
+        │       ├── tag_closing: "%>" (location: (3:22)-(3:22))
+        │       ├── statements: (1 item)
+        │       │   └── @ HTMLElementNode (location: (4:2)-(4:10))
+        │       │       ├── open_tag:
+        │       │       │   └── @ HTMLOpenTagNode (location: (4:2)-(4:3))
+        │       │       │       ├── tag_opening: "<" (location: (4:2)-(4:2))
+        │       │       │       ├── tag_name: "p" (location: (4:2)-(4:3))
+        │       │       │       ├── tag_closing: ">" (location: (4:3)-(4:3))
+        │       │       │       ├── children: []
+        │       │       │       └── is_void: false
+        │       │       │
+        │       │       ├── tag_name: "p" (location: (4:2)-(4:3))
+        │       │       ├── body: (1 item)
+        │       │       │   └── @ HTMLTextNode (location: (4:4)-(4:10))
+        │       │       │       └── content: "Failed"
+        │       │       │
+        │       │       ├── close_tag:
+        │       │       │   └── @ HTMLCloseTagNode (location: (4:10)-(4:10))
+        │       │       │       ├── tag_opening: "</" (location: (4:10)-(4:10))
+        │       │       │       ├── tag_name: "p" (location: (4:10)-(4:10))
+        │       │       │       ├── children: []
+        │       │       │       └── tag_closing: ">" (location: (4:10)-(4:10))
+        │       │       │
+        │       │       ├── is_void: false
+        │       │       └── element_source: "Slim"
+        │       │
+        │       └── subsequent: ∅
+        │
+        ├── else_clause: ∅
+        ├── ensure_clause:
+        │   └── @ ERBEnsureNode (location: (5:0)-(5:8))
+        │       ├── tag_opening: "<%" (location: (5:0)-(5:0))
+        │       ├── content: "ensure" (location: (5:2)-(5:8))
+        │       ├── tag_closing: "%>" (location: (5:8)-(5:8))
+        │       └── statements: (1 item)
+        │           └── @ HTMLElementNode (location: (6:2)-(6:8))
+        │               ├── open_tag:
+        │               │   └── @ HTMLOpenTagNode (location: (6:2)-(6:3))
+        │               │       ├── tag_opening: "<" (location: (6:2)-(6:2))
+        │               │       ├── tag_name: "p" (location: (6:2)-(6:3))
+        │               │       ├── tag_closing: ">" (location: (6:3)-(6:3))
+        │               │       ├── children: []
+        │               │       └── is_void: false
+        │               │
+        │               ├── tag_name: "p" (location: (6:2)-(6:3))
+        │               ├── body: (1 item)
+        │               │   └── @ HTMLTextNode (location: (6:4)-(6:8))
+        │               │       └── content: "Done"
+        │               │
+        │               ├── close_tag:
+        │               │   └── @ HTMLCloseTagNode (location: (6:8)-(6:8))
+        │               │       ├── tag_opening: "</" (location: (6:8)-(6:8))
+        │               │       ├── tag_name: "p" (location: (6:8)-(6:8))
+        │               │       ├── children: []
+        │               │       └── tag_closing: ">" (location: (6:8)-(6:8))
+        │               │
+        │               ├── is_void: false
+        │               └── element_source: "Slim"
+        │
+        │
+        └── end_node:
+            └── @ ERBEndNode (location: (6:8)-(6:8))
+                ├── tag_opening: "<%" (location: (6:8)-(6:8))
+                ├── content: " end " (location: (6:8)-(6:8))
+                └── tag_closing: "%>" (location: (6:8)-(6:8))

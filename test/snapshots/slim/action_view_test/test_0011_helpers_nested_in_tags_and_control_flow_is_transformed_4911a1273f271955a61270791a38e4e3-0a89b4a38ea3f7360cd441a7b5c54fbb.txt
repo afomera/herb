@@ -1,0 +1,134 @@
+---
+source: "Slim::ActionViewTest#test_0011_helpers nested in tags and control flow is transformed"
+input: |2-
+ul
+  - [1, 2].each do |id|
+    li = link_to "Item #{id}", "/items/#{id}", class: "item"
+options: {language: "slim", action_view_helpers: true}
+---
+@ DocumentNode (location: (1:0)-(3:60))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(3:60))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:2))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "ul" (location: (1:0)-(1:2))
+        │       ├── tag_closing: ">" (location: (1:2)-(1:2))
+        │       ├── children: []
+        │       └── is_void: false
+        │
+        ├── tag_name: "ul" (location: (1:0)-(1:2))
+        ├── body: (1 item)
+        │   └── @ ERBBlockNode (location: (2:2)-(3:60))
+        │       ├── tag_opening: "<%" (location: (2:2)-(2:2))
+        │       ├── content: "[1, 2].each do |id|" (location: (2:4)-(2:23))
+        │       ├── tag_closing: "%>" (location: (2:23)-(2:23))
+        │       ├── body: (1 item)
+        │       │   └── @ HTMLElementNode (location: (3:4)-(3:60))
+        │       │       ├── open_tag:
+        │       │       │   └── @ HTMLOpenTagNode (location: (3:4)-(3:6))
+        │       │       │       ├── tag_opening: "<" (location: (3:4)-(3:4))
+        │       │       │       ├── tag_name: "li" (location: (3:4)-(3:6))
+        │       │       │       ├── tag_closing: ">" (location: (3:6)-(3:6))
+        │       │       │       ├── children: []
+        │       │       │       └── is_void: false
+        │       │       │
+        │       │       ├── tag_name: "li" (location: (3:4)-(3:6))
+        │       │       ├── body: (1 item)
+        │       │       │   └── @ HTMLElementNode (location: (3:7)-(3:60))
+        │       │       │       ├── open_tag:
+        │       │       │       │   └── @ ERBOpenTagNode (location: (3:7)-(3:60))
+        │       │       │       │       ├── tag_opening: "<%=" (location: (3:7)-(3:7))
+        │       │       │       │       ├── content: "link_to "Item #{id}", "/items/#{id}", class: "item"" (location: (3:9)-(3:60))
+        │       │       │       │       ├── tag_closing: "%>" (location: (3:60)-(3:60))
+        │       │       │       │       ├── tag_name: "a" (location: (3:9)-(3:16))
+        │       │       │       │       └── children: (2 items)
+        │       │       │       │           ├── @ HTMLAttributeNode (location: (3:47)-(3:60))
+        │       │       │       │           │   ├── name:
+        │       │       │       │           │   │   └── @ HTMLAttributeNameNode (location: (3:47)-(3:52))
+        │       │       │       │           │   │       └── children: (1 item)
+        │       │       │       │           │   │           └── @ LiteralNode (location: (3:47)-(3:52))
+        │       │       │       │           │   │               └── content: "class"
+        │       │       │       │           │   │
+        │       │       │       │           │   │
+        │       │       │       │           │   ├── equals: ": " (location: (3:52)-(3:54))
+        │       │       │       │           │   └── value:
+        │       │       │       │           │       └── @ HTMLAttributeValueNode (location: (3:54)-(3:60))
+        │       │       │       │           │           ├── open_quote: """ (location: (3:54)-(3:55))
+        │       │       │       │           │           ├── children: (1 item)
+        │       │       │       │           │           │   └── @ LiteralNode (location: (3:55)-(3:59))
+        │       │       │       │           │           │       └── content: "item"
+        │       │       │       │           │           │
+        │       │       │       │           │           ├── close_quote: """ (location: (3:59)-(3:60))
+        │       │       │       │           │           └── quoted: true
+        │       │       │       │           │
+        │       │       │       │           │
+        │       │       │       │           └── @ HTMLAttributeNode (location: (3:31)-(3:45))
+        │       │       │       │               ├── name:
+        │       │       │       │               │   └── @ HTMLAttributeNameNode (location: (3:31)-(3:45))
+        │       │       │       │               │       └── children: (1 item)
+        │       │       │       │               │           └── @ LiteralNode (location: (3:31)-(3:45))
+        │       │       │       │               │               └── content: "href"
+        │       │       │       │               │
+        │       │       │       │               │
+        │       │       │       │               ├── equals: ":" (location: (3:31)-(3:45))
+        │       │       │       │               └── value:
+        │       │       │       │                   └── @ HTMLAttributeValueNode (location: (3:31)-(3:45))
+        │       │       │       │                       ├── open_quote: ∅
+        │       │       │       │                       ├── children: (1 item)
+        │       │       │       │                       │   └── @ RubyLiteralNode (location: (3:31)-(3:45))
+        │       │       │       │                       │       └── content: "url_for(\"/items/\#{id}\")"
+        │       │       │       │                       │
+        │       │       │       │                       ├── close_quote: ∅
+        │       │       │       │                       └── quoted: true
+        │       │       │       │
+        │       │       │       │
+        │       │       │       │
+        │       │       │       ├── tag_name: "a" (location: (3:9)-(3:16))
+        │       │       │       ├── body: (1 item)
+        │       │       │       │   └── @ RubyLiteralNode (location: (3:7)-(3:60))
+        │       │       │       │       └── content: "\"Item \#{id}\""
+        │       │       │       │
+        │       │       │       ├── close_tag:
+        │       │       │       │   └── @ HTMLVirtualCloseTagNode (location: (3:60)-(3:60))
+        │       │       │       │       └── tag_name: "a" (location: (3:9)-(3:16))
+        │       │       │       │
+        │       │       │       ├── is_void: false
+        │       │       │       └── element_source: "ActionView::Helpers::UrlHelper#link_to"
+        │       │       │
+        │       │       ├── close_tag:
+        │       │       │   └── @ HTMLCloseTagNode (location: (3:60)-(3:60))
+        │       │       │       ├── tag_opening: "</" (location: (3:60)-(3:60))
+        │       │       │       ├── tag_name: "li" (location: (3:60)-(3:60))
+        │       │       │       ├── children: []
+        │       │       │       └── tag_closing: ">" (location: (3:60)-(3:60))
+        │       │       │
+        │       │       ├── is_void: false
+        │       │       └── element_source: "Slim"
+        │       │
+        │       ├── block_arguments: (1 item)
+        │       │   └── @ RubyParameterNode (location: (2:20)-(2:22))
+        │       │       ├── name: "id" (location: (2:20)-(2:22))
+        │       │       ├── default_value: ∅
+        │       │       ├── kind: "positional"
+        │       │       └── required: true
+        │       │
+        │       ├── rescue_clause: ∅
+        │       ├── else_clause: ∅
+        │       ├── ensure_clause: ∅
+        │       └── end_node:
+        │           └── @ ERBEndNode (location: (3:60)-(3:60))
+        │               ├── tag_opening: "<%" (location: (3:60)-(3:60))
+        │               ├── content: " end " (location: (3:60)-(3:60))
+        │               └── tag_closing: "%>" (location: (3:60)-(3:60))
+        │
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (3:60)-(3:60))
+        │       ├── tag_opening: "</" (location: (3:60)-(3:60))
+        │       ├── tag_name: "ul" (location: (3:60)-(3:60))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (3:60)-(3:60))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

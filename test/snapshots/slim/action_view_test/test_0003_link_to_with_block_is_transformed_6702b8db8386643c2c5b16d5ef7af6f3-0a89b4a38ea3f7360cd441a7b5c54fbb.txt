@@ -1,0 +1,79 @@
+---
+source: "Slim::ActionViewTest#test_0003_link_to with block is transformed"
+input: |2-
+= link_to path do
+  span Hi #{name}
+options: {language: "slim", action_view_helpers: true}
+---
+@ DocumentNode (location: (1:0)-(2:17))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(2:17))
+        ├── open_tag:
+        │   └── @ ERBOpenTagNode (location: (1:0)-(1:17))
+        │       ├── tag_opening: "<%=" (location: (1:0)-(1:0))
+        │       ├── content: "link_to path do" (location: (1:2)-(1:17))
+        │       ├── tag_closing: "%>" (location: (1:17)-(1:17))
+        │       ├── tag_name: "a" (location: (1:2)-(1:9))
+        │       └── children: (1 item)
+        │           └── @ HTMLAttributeNode (location: (1:10)-(1:14))
+        │               ├── name:
+        │               │   └── @ HTMLAttributeNameNode (location: (1:10)-(1:14))
+        │               │       └── children: (1 item)
+        │               │           └── @ LiteralNode (location: (1:10)-(1:14))
+        │               │               └── content: "href"
+        │               │
+        │               │
+        │               ├── equals: ":" (location: (1:10)-(1:14))
+        │               └── value:
+        │                   └── @ HTMLAttributeValueNode (location: (1:10)-(1:14))
+        │                       ├── open_quote: ∅
+        │                       ├── children: (1 item)
+        │                       │   └── @ RubyLiteralNode (location: (1:10)-(1:14))
+        │                       │       └── content: "url_for(path)"
+        │                       │
+        │                       ├── close_quote: ∅
+        │                       └── quoted: true
+        │
+        │
+        │
+        ├── tag_name: "a" (location: (1:2)-(1:9))
+        ├── body: (1 item)
+        │   └── @ HTMLElementNode (location: (2:2)-(2:17))
+        │       ├── open_tag:
+        │       │   └── @ HTMLOpenTagNode (location: (2:2)-(2:6))
+        │       │       ├── tag_opening: "<" (location: (2:2)-(2:2))
+        │       │       ├── tag_name: "span" (location: (2:2)-(2:6))
+        │       │       ├── tag_closing: ">" (location: (2:6)-(2:6))
+        │       │       ├── children: []
+        │       │       └── is_void: false
+        │       │
+        │       ├── tag_name: "span" (location: (2:2)-(2:6))
+        │       ├── body: (2 items)
+        │       │   ├── @ HTMLTextNode (location: (2:7)-(2:10))
+        │       │   │   └── content: "Hi "
+        │       │   │
+        │       │   └── @ ERBContentNode (location: (2:10)-(2:16))
+        │       │       ├── tag_opening: "<%=" (location: (2:10)-(2:10))
+        │       │       ├── content: "name" (location: (2:12)-(2:16))
+        │       │       ├── tag_closing: "%>" (location: (2:16)-(2:16))
+        │       │       ├── parsed: true
+        │       │       └── valid: true
+        │       │
+        │       ├── close_tag:
+        │       │   └── @ HTMLCloseTagNode (location: (2:17)-(2:17))
+        │       │       ├── tag_opening: "</" (location: (2:17)-(2:17))
+        │       │       ├── tag_name: "span" (location: (2:17)-(2:17))
+        │       │       ├── children: []
+        │       │       └── tag_closing: ">" (location: (2:17)-(2:17))
+        │       │
+        │       ├── is_void: false
+        │       └── element_source: "Slim"
+        │
+        ├── close_tag:
+        │   └── @ ERBEndNode (location: (2:17)-(2:17))
+        │       ├── tag_opening: "<%" (location: (2:17)-(2:17))
+        │       ├── content: " end " (location: (2:17)-(2:17))
+        │       └── tag_closing: "%>" (location: (2:17)-(2:17))
+        │
+        ├── is_void: false
+        └── element_source: "ActionView::Helpers::UrlHelper#link_to"

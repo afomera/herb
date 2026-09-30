@@ -1,0 +1,82 @@
+---
+source: "Slim::ParserTest#test_0004_implicit div with id and classes"
+input: "#main.a.b Content"
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(1:17))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(1:17))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:9))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "div" (location: (1:0)-(1:0))
+        │       ├── tag_closing: ">" (location: (1:9)-(1:9))
+        │       ├── children: (4 items)
+        │       │   ├── @ WhitespaceNode (location: (1:0)-(1:0))
+        │       │   │   └── value: " " (location: (1:0)-(1:0))
+        │       │   │
+        │       │   ├── @ HTMLAttributeNode (location: (1:0)-(1:5))
+        │       │   │   ├── name:
+        │       │   │   │   └── @ HTMLAttributeNameNode (location: (1:0)-(1:0))
+        │       │   │   │       └── children: (1 item)
+        │       │   │   │           └── @ LiteralNode (location: (1:0)-(1:0))
+        │       │   │   │               └── content: "id"
+        │       │   │   │
+        │       │   │   │
+        │       │   │   ├── equals: "=" (location: (1:1)-(1:1))
+        │       │   │   └── value:
+        │       │   │       └── @ HTMLAttributeValueNode (location: (1:1)-(1:5))
+        │       │   │           ├── open_quote: """ (location: (1:1)-(1:1))
+        │       │   │           ├── children: (1 item)
+        │       │   │           │   └── @ LiteralNode (location: (1:1)-(1:5))
+        │       │   │           │       └── content: "main"
+        │       │   │           │
+        │       │   │           ├── close_quote: """ (location: (1:5)-(1:5))
+        │       │   │           └── quoted: true
+        │       │   │
+        │       │   │
+        │       │   ├── @ WhitespaceNode (location: (1:5)-(1:5))
+        │       │   │   └── value: " " (location: (1:5)-(1:5))
+        │       │   │
+        │       │   └── @ HTMLAttributeNode (location: (1:5)-(1:9))
+        │       │       ├── name:
+        │       │       │   └── @ HTMLAttributeNameNode (location: (1:5)-(1:5))
+        │       │       │       └── children: (1 item)
+        │       │       │           └── @ LiteralNode (location: (1:5)-(1:5))
+        │       │       │               └── content: "class"
+        │       │       │
+        │       │       │
+        │       │       ├── equals: "=" (location: (1:6)-(1:6))
+        │       │       └── value:
+        │       │           └── @ HTMLAttributeValueNode (location: (1:6)-(1:9))
+        │       │               ├── open_quote: """ (location: (1:6)-(1:6))
+        │       │               ├── children: (3 items)
+        │       │               │   ├── @ LiteralNode (location: (1:6)-(1:7))
+        │       │               │   │   └── content: "a"
+        │       │               │   │
+        │       │               │   ├── @ LiteralNode (location: (1:8)-(1:8))
+        │       │               │   │   └── content: " "
+        │       │               │   │
+        │       │               │   └── @ LiteralNode (location: (1:8)-(1:9))
+        │       │               │       └── content: "b"
+        │       │               │
+        │       │               ├── close_quote: """ (location: (1:9)-(1:9))
+        │       │               └── quoted: true
+        │       │
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "div" (location: (1:0)-(1:0))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (1:10)-(1:17))
+        │       └── content: "Content"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (1:17)-(1:17))
+        │       ├── tag_opening: "</" (location: (1:17)-(1:17))
+        │       ├── tag_name: "div" (location: (1:17)-(1:17))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (1:17)-(1:17))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

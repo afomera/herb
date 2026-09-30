@@ -1,0 +1,58 @@
+---
+source: "Slim::ParserTest#test_0022_brace block with explicit closing brace"
+input: |2-
+- items.each { |item|
+  li = item
+- }
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(3:3))
+└── children: (1 item)
+    └── @ ERBBlockNode (location: (1:0)-(3:3))
+        ├── tag_opening: "<%" (location: (1:0)-(1:0))
+        ├── content: "items.each { |item|" (location: (1:2)-(1:21))
+        ├── tag_closing: "%>" (location: (1:21)-(1:21))
+        ├── body: (1 item)
+        │   └── @ HTMLElementNode (location: (2:2)-(2:11))
+        │       ├── open_tag:
+        │       │   └── @ HTMLOpenTagNode (location: (2:2)-(2:4))
+        │       │       ├── tag_opening: "<" (location: (2:2)-(2:2))
+        │       │       ├── tag_name: "li" (location: (2:2)-(2:4))
+        │       │       ├── tag_closing: ">" (location: (2:4)-(2:4))
+        │       │       ├── children: []
+        │       │       └── is_void: false
+        │       │
+        │       ├── tag_name: "li" (location: (2:2)-(2:4))
+        │       ├── body: (1 item)
+        │       │   └── @ ERBContentNode (location: (2:5)-(2:11))
+        │       │       ├── tag_opening: "<%=" (location: (2:5)-(2:5))
+        │       │       ├── content: "item" (location: (2:7)-(2:11))
+        │       │       ├── tag_closing: "%>" (location: (2:11)-(2:11))
+        │       │       ├── parsed: true
+        │       │       └── valid: true
+        │       │
+        │       ├── close_tag:
+        │       │   └── @ HTMLCloseTagNode (location: (2:11)-(2:11))
+        │       │       ├── tag_opening: "</" (location: (2:11)-(2:11))
+        │       │       ├── tag_name: "li" (location: (2:11)-(2:11))
+        │       │       ├── children: []
+        │       │       └── tag_closing: ">" (location: (2:11)-(2:11))
+        │       │
+        │       ├── is_void: false
+        │       └── element_source: "Slim"
+        │
+        ├── block_arguments: (1 item)
+        │   └── @ RubyParameterNode (location: (1:16)-(1:20))
+        │       ├── name: "item" (location: (1:16)-(1:20))
+        │       ├── default_value: ∅
+        │       ├── kind: "positional"
+        │       └── required: true
+        │
+        ├── rescue_clause: ∅
+        ├── else_clause: ∅
+        ├── ensure_clause: ∅
+        └── end_node:
+            └── @ ERBEndNode (location: (3:0)-(3:3))
+                ├── tag_opening: "<%" (location: (3:0)-(3:0))
+                ├── content: "}" (location: (3:2)-(3:3))
+                └── tag_closing: "%>" (location: (3:3)-(3:3))

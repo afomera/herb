@@ -1,0 +1,24 @@
+---
+source: "Slim::ParserTest#test_0028_doctypes"
+input: |2-
+doctype html
+doctype xml
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:11))
+└── children: (2 items)
+    ├── @ HTMLDoctypeNode (location: (1:0)-(1:12))
+    │   ├── tag_opening: "<!DOCTYPE" (location: (1:0)-(1:0))
+    │   ├── children: (1 item)
+    │   │   └── @ LiteralNode (location: (1:8)-(1:12))
+    │   │       └── content: " html"
+    │   │
+    │   └── tag_closing: ">" (location: (1:12)-(1:12))
+    │
+    └── @ XMLDeclarationNode (location: (2:0)-(2:11))
+        ├── tag_opening: "<?xml" (location: (2:0)-(2:0))
+        ├── children: (1 item)
+        │   └── @ LiteralNode (location: (2:8)-(2:11))
+        │       └── content: " version=\"1.0\" encoding=\"utf-8\" "
+        │
+        └── tag_closing: "?>" (location: (2:11)-(2:11))

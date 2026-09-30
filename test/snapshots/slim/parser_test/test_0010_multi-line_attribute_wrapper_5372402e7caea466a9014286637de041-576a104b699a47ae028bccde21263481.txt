@@ -1,0 +1,78 @@
+---
+source: "Slim::ParserTest#test_0010_multi-line attribute wrapper"
+input: |2-
+a(href="/x"
+  title="y") Link
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:17))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(2:17))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(2:12))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "a" (location: (1:0)-(1:1))
+        │       ├── tag_closing: ">" (location: (2:12)-(2:12))
+        │       ├── children: (4 items)
+        │       │   ├── @ WhitespaceNode (location: (1:2)-(1:2))
+        │       │   │   └── value: " " (location: (1:2)-(1:2))
+        │       │   │
+        │       │   ├── @ HTMLAttributeNode (location: (1:2)-(1:11))
+        │       │   │   ├── name:
+        │       │   │   │   └── @ HTMLAttributeNameNode (location: (1:2)-(1:6))
+        │       │   │   │       └── children: (1 item)
+        │       │   │   │           └── @ LiteralNode (location: (1:2)-(1:6))
+        │       │   │   │               └── content: "href"
+        │       │   │   │
+        │       │   │   │
+        │       │   │   ├── equals: "=" (location: (1:6)-(1:7))
+        │       │   │   └── value:
+        │       │   │       └── @ HTMLAttributeValueNode (location: (1:7)-(1:11))
+        │       │   │           ├── open_quote: """ (location: (1:7)-(1:8))
+        │       │   │           ├── children: (1 item)
+        │       │   │           │   └── @ LiteralNode (location: (1:8)-(1:10))
+        │       │   │           │       └── content: "/x"
+        │       │   │           │
+        │       │   │           ├── close_quote: """ (location: (1:10)-(1:11))
+        │       │   │           └── quoted: true
+        │       │   │
+        │       │   │
+        │       │   ├── @ WhitespaceNode (location: (2:2)-(2:2))
+        │       │   │   └── value: " " (location: (2:2)-(2:2))
+        │       │   │
+        │       │   └── @ HTMLAttributeNode (location: (2:2)-(2:11))
+        │       │       ├── name:
+        │       │       │   └── @ HTMLAttributeNameNode (location: (2:2)-(2:7))
+        │       │       │       └── children: (1 item)
+        │       │       │           └── @ LiteralNode (location: (2:2)-(2:7))
+        │       │       │               └── content: "title"
+        │       │       │
+        │       │       │
+        │       │       ├── equals: "=" (location: (2:7)-(2:8))
+        │       │       └── value:
+        │       │           └── @ HTMLAttributeValueNode (location: (2:8)-(2:11))
+        │       │               ├── open_quote: """ (location: (2:8)-(2:9))
+        │       │               ├── children: (1 item)
+        │       │               │   └── @ LiteralNode (location: (2:9)-(2:10))
+        │       │               │       └── content: "y"
+        │       │               │
+        │       │               ├── close_quote: """ (location: (2:10)-(2:11))
+        │       │               └── quoted: true
+        │       │
+        │       │
+        │       └── is_void: false
+        │
+        ├── tag_name: "a" (location: (1:0)-(1:1))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (2:13)-(2:17))
+        │       └── content: "Link"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (2:17)-(2:17))
+        │       ├── tag_opening: "</" (location: (2:17)-(2:17))
+        │       ├── tag_name: "a" (location: (2:17)-(2:17))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (2:17)-(2:17))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

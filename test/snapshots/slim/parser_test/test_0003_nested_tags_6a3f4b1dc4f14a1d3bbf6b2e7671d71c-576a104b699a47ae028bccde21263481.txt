@@ -1,0 +1,78 @@
+---
+source: "Slim::ParserTest#test_0003_nested tags"
+input: |2-
+ul
+  li One
+  li Two
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(3:8))
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (1:0)-(3:8))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (1:0)-(1:2))
+        │       ├── tag_opening: "<" (location: (1:0)-(1:0))
+        │       ├── tag_name: "ul" (location: (1:0)-(1:2))
+        │       ├── tag_closing: ">" (location: (1:2)-(1:2))
+        │       ├── children: []
+        │       └── is_void: false
+        │
+        ├── tag_name: "ul" (location: (1:0)-(1:2))
+        ├── body: (2 items)
+        │   ├── @ HTMLElementNode (location: (2:2)-(2:8))
+        │   │   ├── open_tag:
+        │   │   │   └── @ HTMLOpenTagNode (location: (2:2)-(2:4))
+        │   │   │       ├── tag_opening: "<" (location: (2:2)-(2:2))
+        │   │   │       ├── tag_name: "li" (location: (2:2)-(2:4))
+        │   │   │       ├── tag_closing: ">" (location: (2:4)-(2:4))
+        │   │   │       ├── children: []
+        │   │   │       └── is_void: false
+        │   │   │
+        │   │   ├── tag_name: "li" (location: (2:2)-(2:4))
+        │   │   ├── body: (1 item)
+        │   │   │   └── @ HTMLTextNode (location: (2:5)-(2:8))
+        │   │   │       └── content: "One"
+        │   │   │
+        │   │   ├── close_tag:
+        │   │   │   └── @ HTMLCloseTagNode (location: (2:8)-(2:8))
+        │   │   │       ├── tag_opening: "</" (location: (2:8)-(2:8))
+        │   │   │       ├── tag_name: "li" (location: (2:8)-(2:8))
+        │   │   │       ├── children: []
+        │   │   │       └── tag_closing: ">" (location: (2:8)-(2:8))
+        │   │   │
+        │   │   ├── is_void: false
+        │   │   └── element_source: "Slim"
+        │   │
+        │   └── @ HTMLElementNode (location: (3:2)-(3:8))
+        │       ├── open_tag:
+        │       │   └── @ HTMLOpenTagNode (location: (3:2)-(3:4))
+        │       │       ├── tag_opening: "<" (location: (3:2)-(3:2))
+        │       │       ├── tag_name: "li" (location: (3:2)-(3:4))
+        │       │       ├── tag_closing: ">" (location: (3:4)-(3:4))
+        │       │       ├── children: []
+        │       │       └── is_void: false
+        │       │
+        │       ├── tag_name: "li" (location: (3:2)-(3:4))
+        │       ├── body: (1 item)
+        │       │   └── @ HTMLTextNode (location: (3:5)-(3:8))
+        │       │       └── content: "Two"
+        │       │
+        │       ├── close_tag:
+        │       │   └── @ HTMLCloseTagNode (location: (3:8)-(3:8))
+        │       │       ├── tag_opening: "</" (location: (3:8)-(3:8))
+        │       │       ├── tag_name: "li" (location: (3:8)-(3:8))
+        │       │       ├── children: []
+        │       │       └── tag_closing: ">" (location: (3:8)-(3:8))
+        │       │
+        │       ├── is_void: false
+        │       └── element_source: "Slim"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (3:8)-(3:8))
+        │       ├── tag_opening: "</" (location: (3:8)-(3:8))
+        │       ├── tag_name: "ul" (location: (3:8)-(3:8))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (3:8)-(3:8))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"

@@ -1,0 +1,22 @@
+---
+source: "Slim::ParserTest#test_0017_output code"
+input: |2-
+= name
+== raw
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:6))
+└── children: (2 items)
+    ├── @ ERBContentNode (location: (1:0)-(1:6))
+    │   ├── tag_opening: "<%=" (location: (1:0)-(1:0))
+    │   ├── content: "name" (location: (1:2)-(1:6))
+    │   ├── tag_closing: "%>" (location: (1:6)-(1:6))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    └── @ ERBContentNode (location: (2:0)-(2:6))
+        ├── tag_opening: "<%==" (location: (2:0)-(2:0))
+        ├── content: "raw" (location: (2:3)-(2:6))
+        ├── tag_closing: "%>" (location: (2:6)-(2:6))
+        ├── parsed: true
+        └── valid: true

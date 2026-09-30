@@ -1,0 +1,100 @@
+---
+source: "Slim::ParserTest#test_0039_dynamic tag"
+input: |2-
+*{ tag: "h1" } Title
+*attrs /
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(2:8))
+└── children: (7 items)
+    ├── @ ERBContentNode (location: (1:0)-(1:0))
+    │   ├── tag_opening: "<%" (location: (1:0)-(1:0))
+    │   ├── content: " _slim_escape = lambda do |value|
+    │     if value.respond_to?(:html_safe?) && value.html_safe?
+    │       value.to_s
+    │     else
+    │       value.to_s.gsub(/[&<>"']/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;", "'" => "&#39;")
+    │     end
+    │   end
+    │   _slim_splat = lambda do |entries, dynamic_tag = false|
+    │     attributes = {}
+    │     add = lambda do |name, value|
+    │       if !attributes.key?(name)
+    │         attributes[name] = value
+    │       elsif name == "class"
+    │         attributes[name] = "#{attributes[name]} #{value}"
+    │       else
+    │         raise ArgumentError, "Multiple #{name} attributes specified"
+    │       end
+    │     end
+    │     escape = ->(value, escaped) { escaped && value != true ? _slim_escape.(value) : value }
+    │     hyphen = lambda do |name, value, escaped|
+    │       if value.is_a?(Hash)
+    │         value.each { |key, nested| hyphen.("#{name}-#{key}", nested, escaped) }
+    │       else
+    │         add.(name, escape.(value, escaped))
+    │       end
+    │     end
+    │     code = lambda do |name, value, escaped|
+    │       if name == "class"
+    │         value = value.is_a?(Array) ? value.join(" ") : value.to_s
+    │         add.(name, escape.(value, escaped)) unless value.empty?
+    │       elsif (name == "data" || name == "aria") && value.is_a?(Hash)
+    │         hyphen.(name, value, escaped)
+    │       elsif value != false && !value.nil?
+    │         add.(name, escape.(value, escaped))
+    │       end
+    │     end
+    │     entries.each do |kind, *arguments|
+    │       case kind
+    │       when :attr then add.(*arguments)
+    │       when :code then code.(*arguments)
+    │       else arguments.first.each { |name, value| code.(name.to_s, value, true) }
+    │       end
+    │     end
+    │     tag = dynamic_tag && attributes.delete("tag").to_s
+    │     html = attributes.sort_by(&:first).map { |name, value| value == true ? " #{name}" : " #{name}=\"#{value}\"" }.join
+    │     dynamic_tag ? [tag.empty? ? "div" : tag, html] : html
+    │   end
+    │   " (location: (1:0)-(1:0))
+    │   ├── tag_closing: "%>" (location: (1:0)-(1:0))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    ├── @ ERBContentNode (location: (1:0)-(1:0))
+    │   ├── tag_opening: "<%" (location: (1:0)-(1:0))
+    │   ├── content: " _slim_tag1 = _slim_splat.([[:splat, ({ tag: "h1" })]], true) " (location: (1:0)-(1:0))
+    │   ├── tag_closing: "%>" (location: (1:0)-(1:0))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    ├── @ ERBContentNode (location: (1:14)-(1:14))
+    │   ├── tag_opening: "<%==" (location: (1:14)-(1:14))
+    │   ├── content: " "<#{_slim_tag1[0]}#{_slim_tag1[1]}>" " (location: (1:14)-(1:14))
+    │   ├── tag_closing: "%>" (location: (1:14)-(1:14))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    ├── @ HTMLTextNode (location: (1:15)-(1:20))
+    │   └── content: "Title"
+    │
+    ├── @ ERBContentNode (location: (1:20)-(1:20))
+    │   ├── tag_opening: "<%==" (location: (1:20)-(1:20))
+    │   ├── content: " "</#{_slim_tag1[0]}>" " (location: (1:20)-(1:20))
+    │   ├── tag_closing: "%>" (location: (1:20)-(1:20))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    ├── @ ERBContentNode (location: (2:0)-(2:0))
+    │   ├── tag_opening: "<%" (location: (2:0)-(2:0))
+    │   ├── content: " _slim_tag2 = _slim_splat.([[:splat, (attrs)]], true) " (location: (2:0)-(2:0))
+    │   ├── tag_closing: "%>" (location: (2:0)-(2:0))
+    │   ├── parsed: true
+    │   └── valid: true
+    │
+    └── @ ERBContentNode (location: (2:6)-(2:6))
+        ├── tag_opening: "<%==" (location: (2:6)-(2:6))
+        ├── content: " "<#{_slim_tag2[0]}#{_slim_tag2[1]} />" " (location: (2:6)-(2:6))
+        ├── tag_closing: "%>" (location: (2:6)-(2:6))
+        ├── parsed: true
+        └── valid: true

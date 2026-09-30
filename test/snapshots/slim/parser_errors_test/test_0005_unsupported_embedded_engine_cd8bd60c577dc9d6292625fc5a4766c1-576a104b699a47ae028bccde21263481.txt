@@ -1,0 +1,40 @@
+---
+source: "Slim::ParserErrorsTest#test_0005_unsupported embedded engine"
+input: |2-
+markdown:
+  # Title
+p After
+options: {language: "slim"}
+---
+@ DocumentNode (location: (1:0)-(3:7))
+├── errors: (1 error)
+│   └── @ UnexpectedError (location: (1:0)-(1:9))
+│       ├── message: "Unsupported embedded engine. Expected: `javascript:`, `css:` or `ruby:`, found: `markdown:`."
+│       ├── description: "Unsupported embedded engine"
+│       ├── expected: "`javascript:`, `css:` or `ruby:`"
+│       └── found: "`markdown:`"
+│
+└── children: (1 item)
+    └── @ HTMLElementNode (location: (3:0)-(3:7))
+        ├── open_tag:
+        │   └── @ HTMLOpenTagNode (location: (3:0)-(3:1))
+        │       ├── tag_opening: "<" (location: (3:0)-(3:0))
+        │       ├── tag_name: "p" (location: (3:0)-(3:1))
+        │       ├── tag_closing: ">" (location: (3:1)-(3:1))
+        │       ├── children: []
+        │       └── is_void: false
+        │
+        ├── tag_name: "p" (location: (3:0)-(3:1))
+        ├── body: (1 item)
+        │   └── @ HTMLTextNode (location: (3:2)-(3:7))
+        │       └── content: "After"
+        │
+        ├── close_tag:
+        │   └── @ HTMLCloseTagNode (location: (3:7)-(3:7))
+        │       ├── tag_opening: "</" (location: (3:7)-(3:7))
+        │       ├── tag_name: "p" (location: (3:7)-(3:7))
+        │       ├── children: []
+        │       └── tag_closing: ">" (location: (3:7)-(3:7))
+        │
+        ├── is_void: false
+        └── element_source: "Slim"
