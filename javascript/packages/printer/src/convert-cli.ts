@@ -24,6 +24,7 @@ interface ConvertCLIOptions {
   dryRun: boolean
   force: boolean
   warnings: boolean
+  idiomaticAttributes: boolean
   indentWidth?: number
   configFile?: string
   help: boolean
@@ -42,7 +43,7 @@ export function convertedPath(path: string, to: TemplateLanguage): string {
 
 export class ConvertCLI {
   private parseArgs(args: string[]): ConvertCLIOptions {
-    const options: ConvertCLIOptions = { files: [], write: false, stdout: false, check: false, dryRun: false, force: false, warnings: true, help: false }
+    const options: ConvertCLIOptions = { files: [], write: false, stdout: false, check: false, dryRun: false, force: false, warnings: true, idiomaticAttributes: false, help: false }
 
     const language = (value: string | undefined, flag: string): TemplateLanguage => {
       if (!value || !LANGUAGES.includes(value as TemplateLanguage)) {
@@ -67,6 +68,7 @@ export class ConvertCLI {
         case "--dry-run": options.dryRun = true; break
         case "--force": options.force = true; break
         case "--no-warnings": options.warnings = false; break
+        case "--idiomatic-attributes": options.idiomaticAttributes = true; break
         case "--indent-width": options.indentWidth = Number(args[++index]); break
         case "--config-file": options.configFile = args[++index]; break
         case "-h":
@@ -88,6 +90,10 @@ export class ConvertCLI {
       converted template renders differently (e.g. Slim omits \`href=nil\`, ERB renders \`href=""\`) are
       reported as warnings with their location.
 
+      ERB attribute values like \`href="<%= url %>"\` are printed as \`href="#{url}"\`, which renders the
+      same. --idiomatic-attributes prints Slim's \`href=url\` instead, which omits the attribute when the value
+      is nil or false and renders it bare when it is true (reported as warnings).
+
       Usage:
         herb-convert [options] <file...>
         cat show.html.slim | herb-convert --from slim -
@@ -102,6 +108,7 @@ export class ConvertCLI {
         --dry-run               Show what --write would do, without writing
         --force                 Write output even when some ERB had no Slim form, and overwrite existing files
         --no-warnings           Don't report readable-mode warnings
+        --idiomatic-attributes  ERB -> Slim: print attr=code instead of attr="#{code}" (changes nil/false/true values)
         --indent-width <n>      Spaces per nesting level (default: 2)
         --config-file <path>    Path to .herb.yml (its slim.shortcuts / slim.merge_attrs are used)
         -h, --help              Show this help message
@@ -164,6 +171,7 @@ export class ConvertCLI {
 
       const result = convertTemplate(Herb, source, from, to, {
         indentWidth: options.indentWidth,
+        idiomaticAttributes: options.idiomaticAttributes,
         slimParserOptions: parserOptionsForLanguage("slim", config),
         erbParserOptions: parserOptionsForLanguage("erb", config),
       })

@@ -67,6 +67,20 @@ describe("herb-convert", () => {
     expect(readFileSync(join(directory, "show.html.slim"), "utf-8")).toBe(".card = title\n")
   })
 
+  test("prints ERB attribute values as a #{} interpolation, or attr=code with --idiomatic-attributes", async () => {
+    const path = file("show.html.erb", `<a href="<%= url %>">Link</a>\n`)
+
+    expect(await run(path)).toBe(0)
+    expect(stdout).toBe(`a href="#{url}" Link\n`)
+    expect(stderr).toBe("")
+
+    stdout = ""
+
+    expect(await run("--idiomatic-attributes", path)).toBe(0)
+    expect(stdout).toBe("a href=url Link\n")
+    expect(stderr).toContain(`${path}:1:9: warning: dynamic-attribute: \`href=url\` changes what renders`)
+  })
+
   test("--to overrides the direction, --output picks the file", async () => {
     const path = file("snippet.txt", "p Hello\n")
     const output = join(directory, "out.erb")
