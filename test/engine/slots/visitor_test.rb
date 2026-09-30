@@ -508,6 +508,22 @@ module Engine
       test "leaves a herb-key inside a collection body to the collection" do
         assert_slots_snapshot(%(<%# herb:slots %>\n<% @u.each do |u| %><li herb-key="<%= u.id %>">x</li><% end %>))
       end
+
+      test "a Slim template writes the directive as a code comment" do
+        visitor = Herb::Engine::Slots::Visitor
+
+        assert_equal :client, visitor.directive_mode("/ herb:slots client\np = @a\n", language: "slim")
+        assert_equal :server, visitor.directive_mode("div\n  / herb:slots\n  p = @a\n", language: "slim")
+        assert visitor.directive?("/herb:slots\np = @a\n", language: :slim)
+      end
+
+      test "a Slim HTML comment or an ERB-style comment is not a Slim directive" do
+        visitor = Herb::Engine::Slots::Visitor
+
+        assert_nil visitor.directive_mode("/! herb:slots client\np = @a\n", language: "slim")
+        assert_nil visitor.directive_mode("p / herb:slots\n", language: "slim")
+        assert_nil visitor.directive_mode("/ herb:slots client\np = @a\n")
+      end
     end
   end
 end

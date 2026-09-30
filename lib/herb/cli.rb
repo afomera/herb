@@ -1155,7 +1155,7 @@ class Herb::CLI
       source = file_content
       options = {}
 
-      slot_mode = slots || Herb::Engine::Slots::Visitor.directive_mode(source)
+      slot_mode = slots || Herb::Engine::Slots::Visitor.directive_mode(source, language: Herb::TemplateLanguage.for_path(@file))
       slot_visitor = Herb::Engine::Slots::Visitor.new(mode: slot_mode) if slot_mode
       visitors = []
 
@@ -1273,7 +1273,7 @@ class Herb::CLI
       source = file_content
       options = {}
 
-      slot_mode = slots || Herb::Engine::Slots::Visitor.directive_mode(source)
+      slot_mode = slots || Herb::Engine::Slots::Visitor.directive_mode(source, language: Herb::TemplateLanguage.for_path(@file))
       slot_visitor = Herb::Engine::Slots::Visitor.new(mode: slot_mode) if slot_mode
 
       options[:filename] = @file if @file

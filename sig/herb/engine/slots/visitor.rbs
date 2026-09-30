@@ -18,6 +18,9 @@ module Herb
       #
       #     mode = Herb::Engine::Slots::Visitor.directive_mode(source)
       #     visitors = mode ? [Herb::Engine::Slots::Visitor.new(mode: mode)] : []
+      #
+      # A Slim template writes the directive as a code comment on a line of its own, `/ herb:slots`
+      # or `/ herb:slots client`, and is read with `directive_mode(source, language: "slim")`.
       class Visitor < Herb::Visitor
         STATE_FAMILIES: Array[Symbol]
 
@@ -44,6 +47,8 @@ module Herb
         attr_reader slot_nodes: Array[untyped]
 
         SLOTS_DIRECTIVE: Regexp
+
+        SLIM_SLOTS_DIRECTIVE: Regexp
 
         MODE_OPTION: Regexp
 
@@ -123,11 +128,14 @@ module Herb
           def interpolated?: () -> bool
         end
 
-        # : (String) -> bool
-        def self.directive?: (String) -> bool
+        # : (String, ?language: (String | Symbol)?) -> bool
+        def self.directive?: (String, ?language: (String | Symbol)?) -> bool
 
-        # : (String) -> Symbol?
-        def self.directive_mode: (String) -> Symbol?
+        # : (String, ?language: (String | Symbol)?) -> Symbol?
+        def self.directive_mode: (String, ?language: (String | Symbol)?) -> Symbol?
+
+        # : ((String | Symbol)?) -> Regexp
+        def self.directive_pattern: ((String | Symbol)?) -> Regexp
 
         # : () -> bool
         def self.reads_erb_source?: () -> bool

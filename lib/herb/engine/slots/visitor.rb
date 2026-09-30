@@ -39,6 +39,9 @@ module Herb
       #     mode = Herb::Engine::Slots::Visitor.directive_mode(source)
       #     visitors = mode ? [Herb::Engine::Slots::Visitor.new(mode: mode)] : []
       #
+      # A Slim template writes the directive as a code comment on a line of its own, `/ herb:slots`
+      # or `/ herb:slots client`, and is read with `directive_mode(source, language: "slim")`.
+      #
       class Visitor < Herb::Visitor
         STATE_FAMILIES = [:read, :compare, :declaration, :conditional, :count, :assignment, :unknown, :binding].freeze #: Array[Symbol]
 
@@ -60,6 +63,7 @@ module Herb
         attr_reader :slot_nodes #: Array[untyped]
 
         SLOTS_DIRECTIVE = /<%#-?\s*herb:slots\b(?<mode>[^%]*?)-?%>/ #: Regexp
+        SLIM_SLOTS_DIRECTIVE = %r{^[ \t]*/(?![!\[])[ \t]*herb:slots\b(?<mode>[^\n]*)$} #: Regexp
         MODE_OPTION = /\b(server|client)\b/ #: Regexp
         MODES = [:server, :client].freeze #: Array[Symbol]
         DELIVERIES = [:inline, :hoist, :none].freeze #: Array[Symbol]
@@ -111,14 +115,14 @@ module Herb
           def interpolated? = Types.interpolated?(type)
         end
 
-        #: (String) -> bool
-        def self.directive?(source)
-          SLOTS_DIRECTIVE.match?(source)
+        #: (String, ?language: (String | Symbol)?) -> bool
+        def self.directive?(source, language: nil)
+          directive_pattern(language).match?(source)
         end
 
-        #: (String) -> Symbol?
-        def self.directive_mode(source)
-          match = SLOTS_DIRECTIVE.match(source)
+        #: (String, ?language: (String | Symbol)?) -> Symbol?
+        def self.directive_mode(source, language: nil)
+          match = directive_pattern(language).match(source)
 
           return nil unless match
 
@@ -126,6 +130,11 @@ module Herb
           mode = named && named[1]
 
           mode ? mode.to_sym : :server
+        end
+
+        #: ((String | Symbol)?) -> Regexp
+        def self.directive_pattern(language)
+          language.to_s == "slim" ? SLIM_SLOTS_DIRECTIVE : SLOTS_DIRECTIVE
         end
 
         #: () -> bool

@@ -690,7 +690,7 @@ module Herb
 
         #: () -> bool
         def server_mode?
-          @input.is_a?(String) && Visitor.directive_mode(@input) == :server
+          @input.is_a?(String) && Visitor.directive_mode(@input, language: @language) == :server
         end
 
         #: (Integer, Integer) -> bool
